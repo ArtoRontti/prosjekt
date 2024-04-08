@@ -90,6 +90,7 @@ void setup() {
     content += "<div id='keyA' class='key'>A</div>";
     content += "<div id='keyS' class='key'>S</div>";
     content += "<div id='keyD' class='key'>D</div>";
+    content += "<div id ='keyF'class='key'>F</div>";
     content += "</div>";
     content += "</body></html>";
     // acceleration buttons
@@ -223,64 +224,4 @@ void sendToUbidots() {
     lastElectricValue = electricValue;
   }
 
-}
-
-// Joshua is here (testing git pushing on a branch and pulling)
-// linjefølging
-void FollowLine(int modus) // Two modes: standard and PID-regulation
-{
-  int lineSensorValue = lineSensors.readLine(lineSensorValues);
-  int16_t position = lineSensorValue;
-
-  if (modus == 0) // PID-REGULATION
-  {
-    // Serial.println("case 0");
-    int16_t error = position - 2000;
-
-    // Get motor speed difference using proportional and derivative
-    // PID terms (the integral term is generally not very useful
-    // for line following).  Here we are using a proportional
-    // constant of 1/4 and a derivative constant of 6, which should
-    // work decently for many Zumo motor choices.  You probably
-    // want to use trial and error to tune these constants for your
-    // particular Zumo and line course.
-    int16_t speedDifference = (error / 4) + 6 * (error - lastError); // Kp = 1/4, error is too big to be used as SpeedDifference itself
-
-    lastError = error;
-
-    // Get individual motor speeds.  The sign of speedDifference
-    // determines if the robot turns left or right.
-    int16_t leftSpeed = 400 + speedDifference; // speedDifference > 0 when position > 2000 (position of line is to the right), turns left
-    int16_t rightSpeed = 400 - speedDifference;
-
-    // Constrain our motor speeds to be between 0 and maxSpeed.
-    // One motor will always be turning at maxSpeed, and the other
-    // will be at maxSpeed-|speedDifference| if that is positive,
-    // else it will be stationary.  For some applications, you
-    // might want to allow the motor speed to go negative so that
-    // it can spin in reverse.
-
-    leftSpeed = constrain(leftSpeed, 0, 400);
-    rightSpeed = constrain(rightSpeed, 0, 400);
-
-    motors.setSpeeds(leftSpeed, rightSpeed);
-  }
-  else if (modus == 1)
-  {
-    // Serial.println("inside case 1");
-    // Serial.println(lineSensorValue);
-
-    if (lineSensorValue < 1800)
-    {
-      motors.setSpeeds(-100, 150);
-    }
-    else if (lineSensorValue > 2200)
-    {
-      motors.setSpeeds(150, -100);
-    }
-    else
-    {
-      motors.setSpeeds(200, 200);
-    }
-  }
 }
