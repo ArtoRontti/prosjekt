@@ -4,8 +4,9 @@
 #define SOFTWARE_BATTERI
 
 // Function declarations
-float UpdateVariables();
-void BatteryStatusDisplay();
-void SpeedoMeter();
+float UpdateSpeed(float, int);
+float UpdateBattery(float, float);
+void BatteryStatusDisplay(float, float);
+void SpeedDisplay(float);
 
 #endif

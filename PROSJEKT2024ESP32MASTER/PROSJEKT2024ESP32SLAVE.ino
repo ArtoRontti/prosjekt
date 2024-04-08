@@ -14,6 +14,7 @@ int sportSpeed = 400;
 int EcoSpeed = 200;
 
 float speed = 0;
+float total_speed = 0; //for moving average
 int counter = 0;
 
 float battery_level = 100;
@@ -36,7 +37,7 @@ void setup() {
 
 void loop() {
   receiveEvent();
-  speed = UpdateSpeed(speed);
+  speed = UpdateSpeed(speed, counter, total_speed);
   battery_level = UpdateBattery(battery_level, speed);
 
   if (speedUpdated) {  // only send speed data to master if speed gets changed

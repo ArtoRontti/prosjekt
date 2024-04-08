@@ -4,7 +4,7 @@
 #include <Arduino.h> // Include Arduino core library for Serial communication
 #include <Zumo32U4.h>
 
-float BatteryLevelFunc(float avgSpeed, float battery_level) // UPDATES AND WATCHES BATTERY LEVEL
+float UpdateBattery(float avgSpeed, float battery_level) // UPDATES AND WATCHES BATTERY LEVEL
 {
   
   battery_level -= abs(( (0.5 / 100) * avgSpeed) * ((battery_level + 1) / 1000)); // battery_level is reduced linearly by both distance and average speed (simple function) (~10 rounds around the track before running out of battery)
@@ -42,7 +42,7 @@ void BatteryStatusDisplay(float battery_level, float account_balance)
   display.gotoXY(17, 7);
   display.print("sec");
 }
-void Speedometer(float average_speed, float CURRENT_TIME, float SPEEDO_MILLIS)
+void SpeedDisplay(float average_speed)
 {
 
     // display average
@@ -54,7 +54,7 @@ void Speedometer(float average_speed, float CURRENT_TIME, float SPEEDO_MILLIS)
     display.print("cm/s");
 }
 
-float UpdateSpeed(float battery_level, int counter)
+float UpdateSpeed(float speed, int counter, float total_speed)
 {
   float rotationsRight = encoders.getCountsAndResetRight() / (75.81 * 12); // CpR = 75.81 * 12 <=> C/CpR = R
   float rotationsLeft = encoders.getCountsAndResetLeft() / (75.81 * 12);
