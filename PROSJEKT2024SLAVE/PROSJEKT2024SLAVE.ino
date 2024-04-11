@@ -45,7 +45,7 @@ void loop() {
 
   battery_level = UpdateBattery(battery_level, speed);
 
-  speedDisplay(speed); // display speed (can add control of display switching)
+  speedDisplay(speed); // display speed on LCD(can add control of display switching)
 
   if (speedUpdated) {  // only send speed data to master if speed gets changed
     sendData();
