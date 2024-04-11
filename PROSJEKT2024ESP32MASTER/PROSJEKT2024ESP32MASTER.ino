@@ -32,6 +32,7 @@ int electricValue = 0;
 int lastElectricValue = 0;
 
 void setup() {
+  WiFi.setSleep(false);
   //I2C
   Wire.begin();
   Serial.begin(115200);
