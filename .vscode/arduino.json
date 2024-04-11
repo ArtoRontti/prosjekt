@@ -1,0 +1,6 @@
+{
+    "board": "pololu-a-star:avr:a-star32U4",
+    "programmer": "avrisp",
+    "output": ".arduino/output",
+    "sketch": "test/test.ino"
+}

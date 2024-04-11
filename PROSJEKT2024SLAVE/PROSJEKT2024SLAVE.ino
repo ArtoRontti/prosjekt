@@ -13,7 +13,7 @@ int regularSpeed = 300;
 int sportSpeed = 400;
 int EcoSpeed = 200;
 
-float speed = 0;
+//float speed = 0;
 float total_speed = 0; //for moving average
 int counter = 0;
 
@@ -113,6 +113,6 @@ void sendData() {
 
 
 // Joshua is here (testing git pushing on a branch and pulling)
-void FollowLine(){
+/*void FollowLine(){
 
-}
+}*/
