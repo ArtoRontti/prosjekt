@@ -1,3 +1,4 @@
+#line 1 "C:\\Users\\Sevat\\OneDrive\\Dokumenter\\Studier\\Ingeniørprosjekt_V24\\prosjekt\\test\\test.ino"
 #include <Wire.h>
 #include <Zumo32U4.h>
 #include <Arduino.h>
@@ -20,25 +21,34 @@ int counter = 0;
 float battery_level = 100;
 
 
+#line 23 "C:\\Users\\Sevat\\OneDrive\\Dokumenter\\Studier\\Ingeniørprosjekt_V24\\prosjekt\\test\\test.ino"
+void setup();
+#line 38 "C:\\Users\\Sevat\\OneDrive\\Dokumenter\\Studier\\Ingeniørprosjekt_V24\\prosjekt\\test\\test.ino"
+void loop();
+#line 50 "C:\\Users\\Sevat\\OneDrive\\Dokumenter\\Studier\\Ingeniørprosjekt_V24\\prosjekt\\test\\test.ino"
+void receiveEvent();
+#line 105 "C:\\Users\\Sevat\\OneDrive\\Dokumenter\\Studier\\Ingeniørprosjekt_V24\\prosjekt\\test\\test.ino"
+void sendData();
+#line 23 "C:\\Users\\Sevat\\OneDrive\\Dokumenter\\Studier\\Ingeniørprosjekt_V24\\prosjekt\\test\\test.ino"
 void setup() {
   Serial.begin(115200);
   Serial.println("Setup initiated..");
   Wire.begin(0x1E);              // Zumo I2C address
-  Wire.onReceive(sendData);      //sends data to master
+  //Wire.onReceive(sendData);      //sends data to master
   Wire.beginTransmission(0x6B);  // OLED I2C address, making it a slave to the Arduino
-  Wire.onReceive(receiveEvent);
+  //Wire.onReceive(receiveEvent);
 
-  encoders.init();
+  //encoders.init();
   display.init();
   display.setLayout21x8(); // 21 * 8 characters (21 row - X, 8 column - Y)
   display.clear();
-  lineSensors.initFiveSensors();
+  //lineSensors.initFiveSensors();
 }
 
 void loop() {
   receiveEvent();
-  speed = UpdateSpeed(speed, counter, total_speed);
-  battery_level = UpdateBattery(battery_level, speed);
+  //speed = UpdateSpeed(speed, counter, total_speed);
+  //battery_level = UpdateBattery(battery_level, speed);
 
   if (speedUpdated) {  // only send speed data to master if speed gets changed
     sendData();
@@ -89,8 +99,8 @@ void receiveEvent() {
       case 'e':  //angle right
         motors.setSpeeds(speed, speed / 2);
         break;
-      case 'f'
-        FollowLine(); // ikke integrert enda
+      case 'f':
+        //FollowLine(); // ikke integrert enda
         break;
       case 'x':
         motors.setSpeeds(0, 0);
@@ -110,9 +120,3 @@ void sendData() {
   Wire.write(speedArray, 3);     // Send the byte array over I2C
   Wire.endTransmission();    //complete the transmission
 }
-
-
-// Joshua is here (testing git pushing on a branch and pulling)
-/*void FollowLine(){
-
-}*/

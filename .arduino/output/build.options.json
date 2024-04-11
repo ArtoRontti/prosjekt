@@ -1,0 +1,11 @@
+{
+  "additionalFiles": "",
+  "builtInToolsFolders": "",
+  "compiler.optimization_flags": "",
+  "customBuildProperties": "",
+  "fqbn": "pololu-a-star:avr:a-star32U4",
+  "hardwareFolders": "C:\\Users\\Sevat\\AppData\\Local\\Arduino15\\packages",
+  "otherLibrariesFolders": "C:\\Users\\Sevat\\OneDrive\\Dokumenter\\Arduino\\libraries",
+  "runtime.ide.version": "10607",
+  "sketchLocation": "C:\\Users\\Sevat\\OneDrive\\Dokumenter\\Studier\\Ingeniørprosjekt_V24\\prosjekt\\test"
+}
