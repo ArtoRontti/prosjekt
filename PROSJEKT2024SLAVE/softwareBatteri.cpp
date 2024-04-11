@@ -13,7 +13,7 @@ float UpdateBattery(float avgSpeed, float battery_level) // UPDATES AND WATCHES 
 }
 
 // DISPLAY FUNCTIONS
-void BatteryStatusDisplay(float battery_level, float account_balance)
+void BatteryStatusDisplay(float battery_level, float account_balance, float CURRENT_TIME)
 {
 
   display.gotoXY(0, 0);
@@ -62,22 +62,19 @@ float UpdateSpeed(float speed, int counter, float total_speed)
   float distanceRight = rotationsRight * (3.5 * 3.14);                  // centimeters (3.5 cm)
   float distanceLeft = rotationsLeft * (3.5 * 3.14);                    // centimeters
   float distanceDifferential = (distanceRight + distanceLeft) / 2;      // in centimeters
-  float distanceTraveled += (distanceRight + distanceLeft) / (2 * 100);       // in meters
+  // float distanceTraveled += (distanceRight + distanceLeft) / (2 * 100);       // in meters
   speed = (1000 * (distanceDifferential)) / (CURRENT_TIME - LAST_TIME); // dv/dt = (avg(dr,dl)) / dt (cm / s) *1000 since CURRENT_TIME is ms
 
-  if (CURRENT_TIME - PREV_UPDATE >= 100)
-  { // takes note of speed every 100 ms for 60 s
-    if (counter == 0)
-    {
-      total_speed = 0; // restart average every 60 s
-    }
-    total_speed += speed;
-    counter += 1;
-    counter %= 120;
-  } // AVERAGE EVERY 60 S, RESTARTS
+  if (counter == 0)
+  {
+    total_speed = 0; // restart average every 2 s
+  }
+  total_speed += speed;
+  counter += 1;
+  counter %= 20; // 0.1*20 = 2 s, moving average with 20 data points, restart after 20
 
   // moving average
-  average_speed = total_speed / counter;
+  float average_speed = total_speed / counter;
   
   return average_speed
 }

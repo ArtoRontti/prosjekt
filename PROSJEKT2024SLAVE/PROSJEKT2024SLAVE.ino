@@ -1,6 +1,7 @@
 #include <Wire.h>
 #include <Zumo32U4.h>
 #include <Arduino.h>
+#include "softwareBatteri.h" // for a bruke updateBattery(), updateSpeed()
 //hei
 Zumo32U4OLED display;
 Zumo32U4Motors motors;
@@ -8,12 +9,12 @@ Zumo32U4Motors motors;
 bool sportMode = false;
 bool EcoMode = false;
 bool speedUpdated = false;
-int speed = 300;
-int regularSpeed = 300;
-int sportSpeed = 400;
-int EcoSpeed = 200;
+float speed = 300;
+float regularSpeed = 300;
+float sportSpeed = 400;
+float EcoSpeed = 200;
 
-//float speed = 0;
+float LAST_TIME = 0;
 float total_speed = 0; //for moving average
 int counter = 0;
 
@@ -36,8 +37,12 @@ void setup() {
 }
 
 void loop() {
-  receiveEvent();
-  speed = UpdateSpeed(speed, counter, total_speed);
+  receiveEvent(); 
+  if (millis() - LAST_TIME >= 100) { // moving average update speed every 100 ms (20 data points) 
+    speed = UpdateSpeed(speed, counter, total_speed); // returnerer en float
+  }
+  
+  LAST_TIME = millis();
   battery_level = UpdateBattery(battery_level, speed);
 
   if (speedUpdated) {  // only send speed data to master if speed gets changed
@@ -45,6 +50,8 @@ void loop() {
     speedUpdated = false;
   } else {
   }
+  
+
 }
 
 void receiveEvent() {
