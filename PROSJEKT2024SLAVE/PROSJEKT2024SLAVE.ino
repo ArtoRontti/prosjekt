@@ -4,26 +4,21 @@
 
 Zumo32U4OLED display;
 Zumo32U4Motors motors;
-Zumo32U4Encoders encoders;
 
 bool sportMode = false;
 bool EcoMode = false;
 bool speedUpdated = false;
-int speed = 0;
-int currentSpeed;
+int speed = 300;
 int regularSpeed = 300;
 int sportSpeed = 400;
 int EcoSpeed = 200;
 
-//acceleration
-bool w = false;
-unsigned long accelerationStart = 0;
-
-//float speed = 0;
-//float total_speed = 0; //for moving average
-//int counter = 0;
+float speed = 0;
+float total_speed = 0; //for moving average
+int counter = 0;
 
 float battery_level = 100;
+
 
 void setup() {
   Serial.begin(115200);
@@ -35,16 +30,15 @@ void setup() {
 
   encoders.init();
   display.init();
-  display.setLayout21x8();  // 21 * 8 characters (21 row - X, 8 column - Y)
+  display.setLayout21x8(); // 21 * 8 characters (21 row - X, 8 column - Y)
   display.clear();
-  //lineSensors.initFiveSensors();
+  lineSensors.initFiveSensors();
 }
 
 void loop() {
   receiveEvent();
-  acceleration();
-  //speed = UpdateSpeed(speed, counter, total_speed);
-  //battery_level = UpdateBattery(battery_level, speed);
+  speed = UpdateSpeed(speed, counter, total_speed);
+  battery_level = UpdateBattery(battery_level, speed);
 
   if (speedUpdated) {  // only send speed data to master if speed gets changed
     sendData();
@@ -79,7 +73,6 @@ void receiveEvent() {
         break;
       case 'w':  // Move forward
         motors.setSpeeds(speed, speed);
-        w = true;
         break;
       case 's':  // Move backward
         motors.setSpeeds(-speed, -speed);
@@ -96,9 +89,9 @@ void receiveEvent() {
       case 'e':  //angle right
         motors.setSpeeds(speed, speed / 2);
         break;
-      /*case 'f'
+      case 'f'
         FollowLine(); // ikke integrert enda
-        break; */
+        break;
       case 'x':
         motors.setSpeeds(0, 0);
         break;
@@ -110,24 +103,16 @@ void receiveEvent() {
 }
 
 void sendData() {
-  byte speedArray[3];                   // has to be an array on I2C
-  speedArray[0] = speed >> 16;          // Most significant byte
+  byte speedArray[3];            // has to be an array on I2C
+  speedArray[0] = speed >> 16;    // Most significant byte
   speedArray[1] = (speed >> 8) & 0xFF;  // Least significant byte
   speedArray[2] = speed & 0xFF;
-  Wire.write(speedArray, 3);  // Send the byte array over I2C
-  Wire.endTransmission();     //complete the transmission
+  Wire.write(speedArray, 3);     // Send the byte array over I2C
+  Wire.endTransmission();    //complete the transmission
 }
 
 
 // Joshua is here (testing git pushing on a branch and pulling)
-void FollowLine() {
-}
+void FollowLine(){
 
-void acceleration() {
-  speed = 100;
-  if (w) {
-    unsigned long elapsedTime = millis() - accelerationStart;
-    speed += elapsedTime * 0.2;
-  }
 }
-
