@@ -2,5 +2,5 @@
     "board": "pololu-a-star:avr:a-star32U4",
     "programmer": "avrisp",
     "output": ".arduino/output",
-    "sketch": "prosjekt/PROSJEKT2024SLAVE/PROSJEKT2024SLAVE.ino"
+    "sketch": "PROSJEKT2024SLAVE/PROSJEKT2024SLAVE.ino"
 }

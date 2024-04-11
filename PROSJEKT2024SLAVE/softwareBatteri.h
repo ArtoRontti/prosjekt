@@ -6,7 +6,7 @@
 // Function declarations
 float UpdateSpeed(float, int);
 float UpdateBattery(float, float);
-void BatteryStatusDisplay(float, float);
+void BatteryStatusDisplay(float, float, float);
 void SpeedDisplay(float);
 
 #endif

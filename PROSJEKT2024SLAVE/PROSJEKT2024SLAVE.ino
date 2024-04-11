@@ -14,7 +14,7 @@ float regularSpeed = 300;
 float sportSpeed = 400;
 float EcoSpeed = 200;
 
-float LAST_TIME = 0;
+float LAST_TIME = 0; // brukt for a oppdatere speed hver 100 ms
 float total_speed = 0; //for moving average
 int counter = 0;
 
@@ -40,10 +40,12 @@ void loop() {
   receiveEvent(); 
   if (millis() - LAST_TIME >= 100) { // moving average update speed every 100 ms (20 data points) 
     speed = UpdateSpeed(speed, counter, total_speed); // returnerer en float
+    LAST_TIME = millis();
   }
-  
-  LAST_TIME = millis();
+
   battery_level = UpdateBattery(battery_level, speed);
+
+  speedDisplay(speed); // display speed (can add control of display switching)
 
   if (speedUpdated) {  // only send speed data to master if speed gets changed
     sendData();
