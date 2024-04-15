@@ -119,7 +119,10 @@ void receiveEvent() {
         motors.setSpeeds(driveSpeed, -driveSpeed);
         break;
       case 'f':
-        FollowLine(); // ikke integrert enda
+        FollowLine();
+        break;
+      case 'c':
+        calibrate();
         break;
       case 'x':
         w = false;
@@ -139,7 +142,7 @@ void calibrate()
   display.setLayout11x4();
   display.gotoXY(1, 1);
   display.print("calibrate");
-  while (millis() - startMillis < 5000) // lock in rotation while calibrating for 5 seconds
+  while (millis() - startMillis < 3000) // lock in rotation while calibrating for 3 seconds
   {
     motors.setSpeeds(-200, 200);
     lineSensors.calibrate();
@@ -152,7 +155,6 @@ void calibrate()
 // Joshua is here (testing git pushing on a branch and pulling)
 void FollowLine() // Two modes: standard and PID-regulation
 {
-  calibrate();
   int lineSensorValue = lineSensors.readLine(lineSensorValues);
   int16_t position = lineSensorValue;
 
