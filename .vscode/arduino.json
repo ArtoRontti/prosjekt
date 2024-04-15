@@ -2,6 +2,7 @@
     "board": "pololu-a-star:avr:a-star32U4",
     "programmer": "avrisp",
     "output": ".arduino/output",
-    "sketch": "test/test.ino",
-    "port": "COM6"
+
+
+    "sketch": "PROSJEKT2024SLAVE/PROSJEKT2024SLAVE.ino"
 }
