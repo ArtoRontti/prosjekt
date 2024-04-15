@@ -23,6 +23,22 @@ int counter = 0;
 
 float battery_level = 100;
 
+//line follower
+unsigned int lineSensorValues[5];
+int16_t lastError = 0;
+
+//acceleration
+bool w = false;
+bool s = false;
+unsigned long accelerationStart;
+int targetSpeed;
+int accelerationVariable;
+static  int previousSpeed = 0;  // Initialize previous speed
+
+//kWh/s
+float powerRemaining = 0;
+float lastPower = 0;
+float powerUsed = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -44,10 +60,14 @@ void loop() {
   
   if (millis() - LAST_TIME >= 100) { // moving average update speed every 100 ms (20 data points) 
     speed = UpdateSpeed(speed, counter, total_speed, millis(), LAST_TIME); // returnerer en float
-    
+    powerUsed = (lastPower - powerRemaining) / 0.1; // kWh/s (eller effekt/forbruk)
+    lastPower = powerRemaining;
     LAST_TIME = millis();
   }
   battery_level = UpdateBattery(speed, battery_level);
+  powerRemaining = (battery_level / 100) * 82; // 82 kWh i en elbils batteri (fra Tesla)
+
+  acceleration();
 
   
 
@@ -57,10 +77,7 @@ void loop() {
   if (speedUpdated) {  // only send speed data to master if speed gets changed
     sendData();
     speedUpdated = false;
-  } else {
   }
-  
-
 }
 
 void receiveEvent() {
@@ -70,28 +87,30 @@ void receiveEvent() {
 
     switch (mode) {  // switch case that takes commands from the master(esp32)
       case 'h':
-        driveSpeed = sportSpeed;
-        speedUpdated = true;
+        targetSpeed = 400;
+        accelerationVariable = 3;
         //display.clear();
         //display.print("SportMode chosen");
         break;
       case 'l':
-        driveSpeed = EcoSpeed;
-        speedUpdated = true;
+        targetSpeed = 200;
+        accelerationVariable = 1;
         //display.clear();
         //display.print("EcoMode chosen");
         break;
       case 'n':
-        driveSpeed = regularSpeed;
-        speedUpdated = true;
+        targetSpeed = 300;
+        accelerationVariable = 2;
         //display.clear();
         //display.print("Regular mode chosen");
         break;
       case 'w':  // Move forward
         motors.setSpeeds(driveSpeed, driveSpeed);
+        w = true;
         break;
       case 's':  // Move backward
         motors.setSpeeds(-driveSpeed, -driveSpeed);
+        s = true;
         break;
       case 'a':  // Turn left
         motors.setSpeeds(-driveSpeed, driveSpeed);
@@ -99,16 +118,12 @@ void receiveEvent() {
       case 'd':  // Turn right
         motors.setSpeeds(driveSpeed, -driveSpeed);
         break;
-      case 'q':  //angle left
-        motors.setSpeeds(driveSpeed / 2, speed);
-        break;
-      case 'e':  //angle right
-        motors.setSpeeds(speed, speed / 2);
-        break;
       case 'f':
         FollowLine(); // ikke integrert enda
         break;
       case 'x':
+        w = false;
+        s = false;
         motors.setSpeeds(0, 0);
         break;
       default:  // Stop
@@ -117,20 +132,62 @@ void receiveEvent() {
     }
   }
 }
-
-void sendData() {
-  byte speedArray[3];            // has to be an array on I2C
-  //speedArray[0] = speed >> 16;    // Most significant byte
-  //speedArray[1] = (speed >> 8) & 0xFF;  // Least significant byte
-  //speedArray[2] = speed & 0xFF;
-  Wire.write(speedArray, 3);     // Send the byte array over I2C
-  Wire.endTransmission();    //complete the transmission
+void calibrate()
+{
+  unsigned long startMillis = millis();
+  display.clear();
+  display.setLayout11x4();
+  display.gotoXY(1, 1);
+  display.print("calibrate");
+  while (millis() - startMillis < 5000) // lock in rotation while calibrating for 5 seconds
+  {
+    motors.setSpeeds(-200, 200);
+    lineSensors.calibrate();
+  }
+  motors.setSpeeds(0, 0);
+  display.clear();
+  display.setLayout21x8();
 }
 
-
 // Joshua is here (testing git pushing on a branch and pulling)
-void FollowLine(){ // trenger for testing
+void FollowLine() // Two modes: standard and PID-regulation
+{
+  calibrate();
+  int lineSensorValue = lineSensors.readLine(lineSensorValues);
+  int16_t position = lineSensorValue;
 
+    // Serial.println("case 0");
+  int16_t error = position - 2000;
+
+    // Get motor speed difference using proportional and derivative
+    // PID terms (the integral term is generally not very useful
+    // for line following).  Here we are using a proportional
+    // constant of 1/4 and a derivative constant of 6, which should
+    // work decently for many Zumo motor choices.  You probably
+    // want to use trial and error to tune these constants for your
+    // particular Zumo and line course.
+  int16_t speedDifference = (error / 4) + 6 * (error - lastError); // Kp = 1/4, error is too big to be used as SpeedDifference itself
+
+  lastError = error;
+
+    // Get individual motor speeds.  The sign of speedDifference
+    // determines if the robot turns left or right.
+  int16_t leftSpeed = 400 + speedDifference; // speedDifference > 0 when position > 2000 (position of line is to the right), turns left
+  int16_t rightSpeed = 400 - speedDifference;
+
+    // Constrain our motor speeds to be between 0 and maxSpeed.
+    // One motor will always be turning at maxSpeed, and the other
+    // will be at maxSpeed-|speedDifference| if that is positive,
+    // else it will be stationary.  For some applications, you
+    // might want to allow the motor speed to go negative so that
+    // it can spin in reverse.
+
+  leftSpeed = constrain(leftSpeed, 0, 400);
+  rightSpeed = constrain(rightSpeed, 0, 400);
+
+  motors.setSpeeds(leftSpeed, rightSpeed);
+  
+  
 }
 
 void SpeedDisplay(float average_speed)
@@ -178,6 +235,7 @@ float UpdateBattery(float avgSpeed, float battery_level) // UPDATES AND WATCHES 
   return battery_level;
 }
 
+
 void BatteryStatusDisplay(float battery_level, float account_balance, float CURRENT_TIME)
 {
 
@@ -191,6 +249,14 @@ void BatteryStatusDisplay(float battery_level, float account_balance, float CURR
   display.print(battery_level);
   display.gotoXY(17, 2);
   display.print("\%");
+
+  //display forbruk/consumption/con
+  display.gotoXY(0, 3);
+  display.print("Forbruk:");
+  display.gotoXY(11, 3);
+  display.print(powerUsed);
+  display.gotoXY(16, 3);
+  display.print("kWh/s");
 
   // display account_balance
   display.gotoXY(0, 5);
@@ -208,3 +274,41 @@ void BatteryStatusDisplay(float battery_level, float account_balance, float CURR
   display.print("sec");
 }
 
+
+void acceleration() {
+  //forward
+  if (w) {
+    if (millis() - accelerationStart >= 10) {
+      if (driveSpeed < targetSpeed) {
+        driveSpeed += accelerationVariable;
+      }
+      if (driveSpeed >= targetSpeed) {
+        driveSpeed = targetSpeed;
+      }
+      accelerationStart = millis();
+    }
+  }
+  if (s) {
+    if (millis() - accelerationStart >= 10) {
+      if (driveSpeed > 0) {
+        driveSpeed -= accelerationVariable;
+      }
+      if (driveSpeed <= 0) {
+        driveSpeed = 0;
+      }
+      accelerationStart = millis();
+    }
+  }
+}
+
+void sendData() {
+
+  if (speed != previousSpeed) {    // Check if speed has changed
+    int speedSend = speed;
+    byte* byteSpeed = (byte*)&speedSend;          // Convert int to byte array
+    Wire.write(byteSpeed, sizeof(int));     // Write byte array to I2C bus
+    Wire.endTransmission();
+    Serial.println(speed);
+    previousSpeed = speed; // Update previous speed
+  }
+}
