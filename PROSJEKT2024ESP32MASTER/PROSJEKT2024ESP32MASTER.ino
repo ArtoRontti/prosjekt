@@ -7,6 +7,7 @@
 #define I2C_SDA 13  //bus
 #define I2C_SCL 12  //bus
 
+int receivedSpeed = 0;
 
 //WiFi
 const char* ssid = "NTNU-IOT";  //wifi name
@@ -20,18 +21,10 @@ int receivedData;  // data from arduino
 const char* UBIDOTS_TOKEN = "BBUS-AcTJ6ccXQVpNyEBYHJ1dRor0GteJmb";
 const char* DEVICE_LABEL = "esp32";
 const char* VARIABLE_LABEL = "Akselerasjon";
-const char* VARIABLE_LABEL_1 = "Parkeringsplass1";
-const char* VARIABLE_LABEL_2 = "Parkeringsplass2";
-const char* VARIABLE_LABEL_EL = "Strompris";
 Ubidots ubidots(UBIDOTS_TOKEN);
-int cheapPrice = 2;  // used to regulate electric bill based on driving patterns
-int regularPrice = 4;
-int highPrice = 6;
-int lastValue = 0;
-int electricValue = 0;
-int lastElectricValue = 0;
 
 void setup() {
+  WiFi.setSleep(false);
   //I2C
   Wire.begin();
   Serial.begin(115200);
@@ -42,9 +35,6 @@ void setup() {
   ubidots.setup();
   ubidots.reconnect();
   ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABEL);
-  ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABEL_EL);
-  ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABEL_1);
-  ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABEL_2);
 
   // Connect to Wi-Fi
   Serial.println();
@@ -90,7 +80,6 @@ void setup() {
     content += "<div id='keyA' class='key'>A</div>";
     content += "<div id='keyS' class='key'>S</div>";
     content += "<div id='keyD' class='key'>D</div>";
-    content += "<div id ='keyF'class='key'>F</div>";
     content += "</div>";
     content += "</body></html>";
     // acceleration buttons
@@ -149,7 +138,7 @@ void setup() {
       String key = server.arg("key");
       Serial.println("Key pressed: " + key);
       server.send(200, "text/plain", "Key pressed: " + key);  //sends key from website to esp
-      Wire.beginTransmission(0x1E);  // sets arduino as slave.
+      Wire.beginTransmission(0x1E);                           // sets arduino as slave.
       Wire.write(key[0]);                                     //sends one byte. the first of the key that gets pressed
       Wire.endTransmission();
     } else {
@@ -179,7 +168,6 @@ void loop() {
   if (!ubidots.connected()) {
     ubidots.reconnect();
     ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABEL);
-    ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABEL_EL);
   }
   ubidots.loop();
 
@@ -189,39 +177,16 @@ void loop() {
 
 
 void sendToUbidots() {
-  //speed
-  Wire.requestFrom(0x1E, 3);  //request info from slave with address 0x1E
-
-  if (Wire.available() == 3) {
-    receivedData = Wire.read();                                        // Read the first byte
-    int secondByte = Wire.read();                                      // Read the second byte
-    int thirdByte = Wire.read();                                       // Read the third byte
-    int value = (receivedData << 16) | (secondByte << 8) | thirdByte;  // Combine bytes into an integer value
-    //Serial.println("received data from slave: " + String(value));
-    if (value != lastValue) {
-
-      float floatValue = float(value);
-      //ubidots.add(VARIABLE_LABEL, floatValue);  //sends data from "value" to ubidots
-      //ubidots.publish();
-      lastValue = value;
-    }  //ubidots' stem users can only send 4000dots per day. thats why we only send the values if they change.
-  }
-  // no point in sending the same value several times
-  //electric price shown on chart on ubidots
-  if (electricValue != lastElectricValue) {
-    float priceToAdd;
-    if (electricValue == 400) {  // 400 is the value for sportSpeed
-      priceToAdd = highPrice;
-    } else if (electricValue == 200) {  //200 is the value for EcoSpeed
-      priceToAdd = cheapPrice;
-    } else if (electricValue == 300) {  //300 is the value for regular speed
-      priceToAdd = regularPrice;
-    } else {
-      priceToAdd = regularPrice;
+  // Speed
+  byte speedToBytes[sizeof(int)];
+  Wire.requestFrom(0x1E, sizeof(int));  // Request bytes from slave
+  if (Wire.available() >= sizeof(int)) {
+    for (int i = 0; i < sizeof(int); i++) {
+      speedToBytes[i] = Wire.read();  // Read byte and store it in the array
     }
-   // ubidots.add(VARIABLE_LABEL_EL, priceToAdd);
-   // ubidots.publish();
-    lastElectricValue = electricValue;
+    int receivedSpeed; 
+    memcpy(&receivedSpeed, speedToBytes, sizeof(int));  // Convert byte array back to integer
+    Serial.println(receivedSpeed);
+  } else {
   }
-
 }
