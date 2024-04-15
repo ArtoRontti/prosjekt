@@ -34,8 +34,7 @@ float battery_level = 100;
 void setup() {
   Serial.begin(115200);
   Serial.println("Setup initiated..");
-  //Wire.begin(0x1E);              // Zumo I2C address
-  Wire.onReceive(sendData);      //sends data to master
+  Wire.begin(0x1E);              // Zumo I2C address
  // Wire.beginTransmission(0x6B);  // OLED I2C address, making it a slave to the Arduino
   Wire.onReceive(receiveEvent);
 
@@ -51,7 +50,6 @@ void loop() {
   acceleration();
   //speed = UpdateSpeed(speed, counter, total_speed);
   //battery_level = UpdateBattery(battery_level, speed);
-
   sendData();
 }
 
@@ -111,7 +109,7 @@ void sendData() {
 
   if (speed != previousSpeed) {    // Check if speed has changed
     byte* byteSpeed = (byte*)&speed;          // Convert int to byte array
-    Wire.write(byteSpeed, sizeof(speed));     // Write byte array to I2C bus
+    Wire.write(byteSpeed, sizeof(int));     // Write byte array to I2C bus
     Wire.endTransmission();
     Serial.println(speed);
     previousSpeed = speed; // Update previous speed
