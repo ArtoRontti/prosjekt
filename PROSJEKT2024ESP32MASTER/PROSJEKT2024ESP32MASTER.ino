@@ -7,15 +7,13 @@
 #define I2C_SDA 13  //bus
 #define I2C_SCL 12  //bus
 
-int receivedSpeed = 0;
-
 //WiFi
 const char* ssid = "NTNU-IOT";  //wifi name
 const char* password = "";      //Wifi password
 WebServer server(80);           // basic server
 
 //I2C
-int receivedData;  // data from arduino
+uint8_t lastReceivedData[6] = { 0 };  // Initialize with default values
 
 //ubidots
 const char* UBIDOTS_TOKEN = "BBUS-AcTJ6ccXQVpNyEBYHJ1dRor0GteJmb";
@@ -23,11 +21,14 @@ const char* DEVICE_LABEL = "esp32";
 const char* VARIABLE_LABEL = "Akselerasjon";
 Ubidots ubidots(UBIDOTS_TOKEN);
 
+
 void setup() {
+
   WiFi.setSleep(false);
   //I2C
   Wire.begin();
   Serial.begin(115200);
+
 
   //ubidots
   ubidots.connectToWifi(ssid, password);
@@ -138,7 +139,7 @@ void setup() {
       String key = server.arg("key");
       Serial.println("Key pressed: " + key);
       server.send(200, "text/plain", "Key pressed: " + key);  //sends key from website to esp
-      Wire.beginTransmission(0x1E);                           // sets arduino as slave.
+      Wire.beginTransmission(8);                              // sets arduino as slave.
       Wire.write(key[0]);                                     //sends one byte. the first of the key that gets pressed
       Wire.endTransmission();
     } else {
@@ -170,23 +171,19 @@ void loop() {
     ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABEL);
   }
   ubidots.loop();
-
-  sendToUbidots();
 }
 
-
-
-void sendToUbidots() {
-  // Speed
-  byte speedToBytes[sizeof(int)];
-  Wire.requestFrom(0x1E, sizeof(int));  // Request bytes from slave
-  if (Wire.available() >= sizeof(int)) {
-    for (int i = 0; i < sizeof(int); i++) {
-      speedToBytes[i] = Wire.read();  // Read byte and store it in the array
+/*void receiveFromZumo() {
+  uint8_t speedReceived = Wire.requestFrom(8, 6);  // Request 6 bytes from bus address 8
+  if (speedReceived > 0) {                         // Check if data is available
+    uint8_t temp[6];
+    Wire.readBytes(temp, 6);                       // Read 6 bytes into temp array
+    if (memcmp(temp, lastReceivedData, 6) != 0) {  // Compare received data with last received data
+      Serial.println("Received data:");
+      for (int i = 0; i < 6; i++) {
+        Serial.println(temp[i]);  // Print each byte received
+      }
+      memcpy(lastReceivedData, temp, 6);  // Update lastReceivedData with the new data
     }
-    int receivedSpeed; 
-    memcpy(&receivedSpeed, speedToBytes, sizeof(int));  // Convert byte array back to integer
-    Serial.println(receivedSpeed);
-  } else {
   }
-}
+}*/
