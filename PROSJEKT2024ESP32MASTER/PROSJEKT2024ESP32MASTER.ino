@@ -1,229 +1,304 @@
-#include <WiFi.h>
-#include <WebServer.h>
 #include <Wire.h>
+#include <Zumo32U4.h>
 #include <Arduino.h>
-#include "UbidotsEsp32Mqtt.h"
 
-#define I2C_SDA 13  //bus
-#define I2C_SCL 12  //bus
+//hei
+Zumo32U4OLED display;
+Zumo32U4Motors motors;
+Zumo32U4Encoders encoders;
+Zumo32U4LineSensors lineSensors;
 
+bool sportMode = false;
+bool EcoMode = false;
+bool speedUpdated = false;
+int accelerationSpeed = 50;
+int currentSpeed;
+int regularSpeed = 300;
+int sportSpeed = 400;
+int EcoSpeed = 200;
 
-//WiFi
-const char* ssid = "NTNU-IOT";  //wifi name
-const char* password = "";      //Wifi password
-WebServer server(80);           // basic server
+//acceleration
+bool w = false;
+bool s = false;
+bool x = false;
+
+unsigned long accelerationStart;
+unsigned long decelerationStart;
+int targetSpeed;
+int accelerationVariable;
+float speed = 300;
+
+float LAST_TIME = 0;    // brukt for a oppdatere speed hver 100 ms
+float total_speed = 0;  //for moving average
+int counter = 0;
+
+float battery_level = 100;
+
+//line follower
+unsigned int lineSensorValues[5];
+int16_t lastError = 0;
 
 //I2C
-int receivedData;  // data from arduino
+static int previousSpeed = 0;  // Initialize previous speed
 
-//ubidots
-const char* UBIDOTS_TOKEN = "BBUS-AcTJ6ccXQVpNyEBYHJ1dRor0GteJmb";
-const char* DEVICE_LABEL = "esp32";
-const char* VARIABLE_LABEL = "Akselerasjon";
-const char* VARIABLE_LABEL_1 = "Parkeringsplass1";
-const char* VARIABLE_LABEL_2 = "Parkeringsplass2";
-const char* VARIABLE_LABEL_EL = "Strompris";
-Ubidots ubidots(UBIDOTS_TOKEN);
-int cheapPrice = 2;  // used to regulate electric bill based on driving patterns
-int regularPrice = 4;
-int highPrice = 6;
-int lastValue = 0;
-int electricValue = 0;
-int lastElectricValue = 0;
+//kWh/s
+float powerRemaining = 0;
+float lastPower = 0;
+float powerUsed = 0;
 
 void setup() {
-  WiFi.setSleep(false);
-  //I2C
-  Wire.begin();
   Serial.begin(115200);
+  Serial.println("Setup initiated..");
+  Wire.begin(8);  // Zumo I2C address
+  Wire.onReceive(receiveEvent);
+  Wire.onRequest(sendData);
 
-  //ubidots
-  ubidots.connectToWifi(ssid, password);
-  ubidots.setCallback(callback);
-  ubidots.setup();
-  ubidots.reconnect();
-  ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABEL);
-  ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABEL_EL);
-  ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABEL_1);
-  ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABEL_2);
-
-  // Connect to Wi-Fi
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-
-
-  //self made website to control zumo
-  server.on("/", HTTP_GET, []() {
-    String content = "<html><head><title>Arduino Keyboard</title>";
-    content += "<style>";
-    content += ".keyboard {";
-    content += "  display: grid;";
-    content += "  grid-template-columns: repeat(4, 60px);";  // 4 columns
-    content += "  grid-gap: 10px;";                          // spacing between keys
-    content += "}";
-    content += ".key {";
-    content += "  width: 100%;";
-    content += "  height: 60px;";
-    content += "  border: 2px solid #000;";
-    content += "  text-align: center;";
-    content += "  line-height: 60px;";
-    content += "  font-size: 20px;";
-    content += "}";
-    content += ".pressed {";                  // New CSS class for pressed keys
-    content += "  background-color: green;";  // Set background color to green
-    content += "}";
-    content += "</style>";
-    content += "</head><body>";
-    content += "<h1>Zumo controls</h1>";
-    content += "<h2>Use the following keys to control the Zumo:</h2>";
-    content += "<div class='keyboard'>";
-    content += "<div id='keyW' class='key'>W</div>";  // Add an id to each key for easier manipulation
-    content += "<div id='keyA' class='key'>A</div>";
-    content += "<div id='keyS' class='key'>S</div>";
-    content += "<div id='keyD' class='key'>D</div>";
-    content += "<div id ='keyF'class='key'>F</div>";
-    content += "<div id = 'keyC'class='key'>C</div>";
-    content += "</div>";
-    content += "</body></html>";
-    // acceleration buttons
-    content += "</style>";
-    content += "</head><body>";
-    content += "<h2>Acceleration controls</h2>";
-    content += "<div class ='keyboard'>";
-    content += "<div id='keyH' class='key'>Sport</div>";    //H button for high acceleration/sport mode
-    content += "<div id='keyL' class='key'>Eco</div>";      //L button for low acceleration/eco mode
-    content += "<div id='keyN' class='key'>regular</div>";  // N button for regular acceleration/ regular mode
-    content += "</div>";
-    content += "</body></html>";
-    // charge buttons
-    content += "</style>";
-    content += "</head><body>";
-    content += "<h2>charging options</h2>";
-    content += "<h3>Battery: insert something to show battery level</h3>";
-    content += "<div class ='keyboard'>";
-    content += "<div id='key1' class='key'>regular</div>";  //1 for regular charge
-    content += "<div id='key2' class='key'>Fast</div>";     //2 for fast charge
-    content += "</div>";
-    content += "</body></html>";
-
-    content += "<script>";
-    content += "let debounceTimer;";
-    content += "window.addEventListener('keydown', function(event) {";
-    content += "    if (debounceTimer) {";
-    content += "        clearTimeout(debounceTimer);";
-    content += "    }";
-    content += "    var key = event.key;";
-    content += "    var xhr = new XMLHttpRequest();";
-    content += "    xhr.open('GET', '/key?key=' + key , true);";
-    content += "    xhr.send();";
-    content += "    document.getElementById('key' + key.toUpperCase()).classList.add('pressed');";  // Add 'pressed' class to corresponding key
-    content += "    debounceTimer = setTimeout(function() {";
-    content += "        debounceTimer = null;";
-    content += "    }, 100);";  // Adjust debounce duration as needed
-    content += "});";
-    //function to stop a function when a key is released
-    content += "window.addEventListener('keyup', function(event) {";
-    content += "    var key = event.key;";
-    content += "    var xhr = new XMLHttpRequest();";
-    content += "    xhr.open('GET', '/key?key=' + key, true);";  // Include the released key in the request URL
-    content += "    xhr.send();";
-    content += "    var xhr = new XMLHttpRequest();";
-    content += "    xhr.open('GET', '/key?key=x', true);";  // Send the 'x' key after releasing any key. this is used to stop the zumo when a key is released
-    content += "    xhr.send();";
-    content += "    document.getElementById('key' + key.toUpperCase()).classList.remove('pressed');";  // Remove 'pressed' class from corresponding key
-    content += "});";
-    content += "</script>";
-    server.send(200, "text/html", content);
-  });
-
-  server.on("/key", HTTP_GET, []() {
-    if (server.hasArg("key")) {
-      String key = server.arg("key");
-      Serial.println("Key pressed: " + key);
-      server.send(200, "text/plain", "Key pressed: " + key);  //sends key from website to esp
-      Wire.beginTransmission(0x1E);  // sets arduino as slave.
-      Wire.write(key[0]);                                     //sends one byte. the first of the key that gets pressed
-      Wire.endTransmission();
-    } else {
-      server.send(400, "text/plain", "Bad request");
-    }
-  });
-
-  server.begin();
-  Serial.println("HTTP server started");
-}
-
-void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("]");
-
-  String payloadStr = "";
-  for (int i = 0; i < length; i++) {
-    payloadStr += (char)payload[i];
-  }
-  Serial.print(payloadStr);
+  encoders.init();
+  display.init();
+  display.setLayout21x8();  // 21 * 8 characters (21 row - X, 8 column - Y)
+  display.clear();
+  lineSensors.initFiveSensors();
 }
 
 void loop() {
-  server.handleClient();
+  receiveEvent();
+  sendData();
 
-  if (!ubidots.connected()) {
-    ubidots.reconnect();
-    ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABEL);
-    ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABEL_EL);
+  if (millis() - LAST_TIME >= 100) {                                        // moving average update speed every 100 ms (20 data points)
+    speed = UpdateSpeed(speed, counter, total_speed, millis(), LAST_TIME);  // returnerer en float
+    powerUsed = (lastPower - powerRemaining) / 0.1;                         // kWh/s (eller effekt/forbruk)
+    lastPower = powerRemaining;
+    LAST_TIME = millis();
   }
-  ubidots.loop();
+  battery_level = UpdateBattery(speed, battery_level);
+  powerRemaining = (battery_level / 100) * 82;  // 82 kWh i en elbils batteri (fra Tesla)
 
-  sendToUbidots();
+  acceleration();
+
+
+
+  SpeedDisplay(speed);  // display speed on LCD(can add control of display switching)
+  BatteryStatusDisplay(battery_level, 100, millis());
+}
+
+void receiveEvent() {
+  while (Wire.available()) {
+    char mode = Wire.read();
+    Serial.println(mode);
+
+    switch (mode) {  // switch case that takes commands from the master(esp32)
+      case 'h':
+        targetSpeed = 400;
+        accelerationVariable = 3;
+        //display.clear();
+        //display.print("SportMode chosen");
+        break;
+      case 'l':
+        targetSpeed = 200;
+        accelerationVariable = 1;
+        //display.clear();
+        //display.print("EcoMode chosen");
+        break;
+      case 'n':
+        targetSpeed = 300;
+        accelerationVariable = 2;
+        //display.clear();
+        //display.print("Regular mode chosen");
+        break;
+      case 'w':  // Move forward
+        motors.setSpeeds(accelerationSpeed, accelerationSpeed);
+        w = true;
+        x = false;
+        s = false;
+        break;
+      case 's':                                                  // Move backward
+        motors.setSpeeds(accelerationSpeed, accelerationSpeed);  //direction defined in acceleration function
+        s = true;
+        x = false;
+        w = false;
+        break;
+      case 'a':  // Turn left
+        motors.setSpeeds(-accelerationSpeed, accelerationSpeed);
+        break;
+      case 'd':  // Turn right
+        motors.setSpeeds(accelerationSpeed, -accelerationSpeed);
+        break;
+      case 'f':
+        FollowLine();
+        break;
+      case 'c':
+        calibrate();
+        break;
+      case 'x':
+        //accelerationVariable = 3;
+        w = false;
+        s = false;
+        x = true;
+        motors.setSpeeds(0, 0);
+        break;
+      default:  // Stop
+        motors.setSpeeds(0, 0);
+        break;
+    }
+  }
+}
+void calibrate() {
+  unsigned long startMillis = millis();
+  display.clear();
+  display.setLayout11x4();
+  display.gotoXY(1, 1);
+  display.print("calibrate");
+  while (millis() - startMillis < 3000)  // lock in rotation while calibrating for 3 seconds
+  {
+    motors.setSpeeds(-200, 200);
+    lineSensors.calibrate();
+  }
+  motors.setSpeeds(0, 0);
+  display.clear();
+  display.setLayout21x8();
+}
+
+// Joshua is here (testing git pushing on a branch and pulling)
+void FollowLine()  // Two modes: standard and PID-regulation
+{
+  int lineSensorValue = lineSensors.readLine(lineSensorValues);
+  int16_t position = lineSensorValue;
+
+  // Serial.println("case 0");
+  int16_t error = position - 2000;
+
+  // Get motor speed difference using proportional and derivative
+  // PID terms (the integral term is generally not very useful
+  // for line following).  Here we are using a proportional
+  // constant of 1/4 and a derivative constant of 6, which should
+  // work decently for many Zumo motor choices.  You probably
+  // want to use trial and error to tune these constants for your
+  // particular Zumo and line course.
+  int16_t speedDifference = (error / 4) + 6 * (error - lastError);  // Kp = 1/4, error is too big to be used as SpeedDifference itself
+
+  lastError = error;
+
+  // Get individual motor speeds.  The sign of speedDifference
+  // determines if the robot turns left or right.
+  int16_t leftSpeed = 400 + speedDifference;  // speedDifference > 0 when position > 2000 (position of line is to the right), turns left
+  int16_t rightSpeed = 400 - speedDifference;
+
+  // Constrain our motor speeds to be between 0 and maxSpeed.
+  // One motor will always be turning at maxSpeed, and the other
+  // will be at maxSpeed-|speedDifference| if that is positive,
+  // else it will be stationary.  For some applications, you
+  // might want to allow the motor speed to go negative so that
+  // it can spin in reverse.
+
+  leftSpeed = constrain(leftSpeed, 0, 400);
+  rightSpeed = constrain(rightSpeed, 0, 400);
+
+  motors.setSpeeds(leftSpeed, rightSpeed);
+}
+
+void SpeedDisplay(float average_speed) {
+
+  // display average
+  display.gotoXY(0, 5);
+  display.print("average:");
+  display.gotoXY(11, 5);
+  display.print(average_speed);
+  display.gotoXY(17, 5);
+  display.print("cm/s");
+}
+
+float UpdateSpeed(float speed, int counter, float total_speed, float CURRENT_TIME, float LAST_TIME) {
+  float rotationsRight = encoders.getCountsAndResetRight() / (75.81 * 12);  // CpR = 75.81 * 12 <=> C/CpR = R
+  float rotationsLeft = encoders.getCountsAndResetLeft() / (75.81 * 12);
+  float moving = (rotationsRight != 0 || rotationsLeft != 0);
+  float distanceRight = rotationsRight * (3.5 * 3.14);              // centimeters (3.5 cm)
+  float distanceLeft = rotationsLeft * (3.5 * 3.14);                // centimeters
+  float distanceDifferential = (distanceRight + distanceLeft) / 2;  // in centimeters
+  // float distanceTraveled += (distanceRight + distanceLeft) / (2 * 100);       // in meters
+  speed = (1000 * (distanceDifferential)) / (CURRENT_TIME - LAST_TIME);  // dv/dt = (avg(dr,dl)) / dt (cm / s) *1000 since CURRENT_TIME is ms
+
+  if (counter == 0) {
+    total_speed = 0;  // restart average every 2 s
+  }
+  total_speed += speed;
+  counter += 1;
+  counter %= 20;  // 0.1*20 = 2 s, moving average with 20 data points, restart after 20
+
+  // moving average
+  float average_speed = total_speed / counter;
+
+  return average_speed;
+}
+
+float UpdateBattery(float avgSpeed, float battery_level)  // UPDATES AND WATCHES BATTERY LEVEL
+{
+
+  battery_level -= abs(((0.5 / 100) * avgSpeed) * ((battery_level + 1) / 1000));  // battery_level is reduced linearly by both distance and average speed (simple function) (~10 rounds around the track before running out of battery)
+
+  return battery_level;
 }
 
 
+void BatteryStatusDisplay(float battery_level, float account_balance, float CURRENT_TIME) {
 
-void sendToUbidots() {
-  //speed
-  Wire.requestFrom(0x1E, 3);  //request info from slave with address 0x1E
+  display.gotoXY(0, 0);
+  display.print("SOFTWARE BATTERY");
 
-  if (Wire.available() == 3) {
-    receivedData = Wire.read();                                        // Read the first byte
-    int secondByte = Wire.read();                                      // Read the second byte
-    int thirdByte = Wire.read();                                       // Read the third byte
-    int value = (receivedData << 16) | (secondByte << 8) | thirdByte;  // Combine bytes into an integer value
-    //Serial.println("received data from slave: " + String(value));
-    if (value != lastValue) {
+  // display battery_level
+  display.gotoXY(0, 2);
+  display.print("level:");
+  display.gotoXY(11, 2);
+  display.print(battery_level);
+  display.gotoXY(17, 2);
+  display.print("\%");
 
-      float floatValue = float(value);
-      //ubidots.add(VARIABLE_LABEL, floatValue);  //sends data from "value" to ubidots
-      //ubidots.publish();
-      lastValue = value;
-    }  //ubidots' stem users can only send 4000dots per day. thats why we only send the values if they change.
+  //display forbruk/consumption/con
+  display.gotoXY(0, 3);
+  display.print("Forbruk:");
+  display.gotoXY(11, 3);
+  display.print(powerUsed);
+  display.gotoXY(16, 3);
+  display.print("kWh/s");
+
+  // display account_balance
+  display.gotoXY(0, 5);
+  // display.print("balance:");
+  display.gotoXY(11, 5);
+  //display.print(account_balance);
+  display.gotoXY(17, 5);
+  //display.print("kr");
+
+  // display time
+  display.gotoXY(11, 7);
+  float time = CURRENT_TIME / 1000;  // in seconds
+  display.print(time);
+  display.gotoXY(17, 7);
+  display.print("sec");
+}
+
+void sendData() {
+  if (accelerationSpeed != previousSpeed) {  // Check if speed has changed
+    Wire.write(accelerationSpeed);
+    Wire.endTransmission();
+    Serial.println(accelerationSpeed);
   }
-  // no point in sending the same value several times
-  //electric price shown on chart on ubidots
-  if (electricValue != lastElectricValue) {
-    float priceToAdd;
-    if (electricValue == 400) {  // 400 is the value for sportSpeed
-      priceToAdd = highPrice;
-    } else if (electricValue == 200) {  //200 is the value for EcoSpeed
-      priceToAdd = cheapPrice;
-    } else if (electricValue == 300) {  //300 is the value for regular speed
-      priceToAdd = regularPrice;
-    } else {
-      priceToAdd = regularPrice;
+  previousSpeed = accelerationSpeed;  // Update previous speed
+}
+
+void acceleration() {
+  //forward
+  if (w) {
+    if (millis() - accelerationStart >= 10) {
+      if (accelerationSpeed < targetSpeed) {
+        accelerationSpeed += accelerationVariable;
+      }
+      if (accelerationSpeed >= targetSpeed) {
+        accelerationSpeed = targetSpeed;
+      }
+      accelerationStart = millis();
     }
-   // ubidots.add(VARIABLE_LABEL_EL, priceToAdd);
-   // ubidots.publish();
-    lastElectricValue = electricValue;
   }
-
+  if(x){
+    accelerationSpeed = 0;
+  }
 }
