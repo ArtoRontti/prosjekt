@@ -12,15 +12,16 @@ const char* ssid = "NTNU-IOT";  //wifi name
 const char* password = "";      //Wifi password
 WebServer server(80);           // basic server
 
-//I2C
-uint8_t lastReceivedData[6] = { 0 };  // Initialize with default values
-
 //ubidots
 const char* UBIDOTS_TOKEN = "BBUS-AcTJ6ccXQVpNyEBYHJ1dRor0GteJmb";
 const char* DEVICE_LABEL = "esp32";
 const char* VARIABLE_LABEL = "Akselerasjon";
 Ubidots ubidots(UBIDOTS_TOKEN);
 
+//I2C
+int newReceivedSpeed;
+int receivedSpeed;
+float actualSpeed;
 
 void setup() {
 
@@ -171,19 +172,26 @@ void loop() {
     ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABEL);
   }
   ubidots.loop();
+  receiveData();
 }
 
-/*void receiveFromZumo() {
-  uint8_t speedReceived = Wire.requestFrom(8, 6);  // Request 6 bytes from bus address 8
-  if (speedReceived > 0) {                         // Check if data is available
-    uint8_t temp[6];
-    Wire.readBytes(temp, 6);                       // Read 6 bytes into temp array
-    if (memcmp(temp, lastReceivedData, 6) != 0) {  // Compare received data with last received data
-      Serial.println("Received data:");
-      for (int i = 0; i < 6; i++) {
-        Serial.println(temp[i]);  // Print each byte received
+void receiveData() {
+  if (Wire.available() <= 3) {
+    Wire.requestFrom(8, 3);
+    byte highByte = Wire.read();  //arrange bytes
+    byte lowByte = Wire.read();
+    byte thirdByte = Wire.read();
+    int receivedSpeed = (highByte << 8) | lowByte;
+    actualSpeed = float(receivedSpeed) / 100;  // make int to float
+
+
+    if (newReceivedSpeed != receivedSpeed) {  //checks received integer
+      if (actualSpeed <= 65.00) {             //avoiding false values, since 65cm/s is the biggest possible value
+        Serial.println(actualSpeed);          //prints converted float
+        ubidots.add(VARIABLE_LABEL, actualSpeed); 
+        ubidots.publish(); //only pusblishes whe the speed changes, because of the 4000 dots per day limit 
       }
-      memcpy(lastReceivedData, temp, 6);  // Update lastReceivedData with the new data
     }
+    newReceivedSpeed = receivedSpeed;
   }
-}*/
+}
