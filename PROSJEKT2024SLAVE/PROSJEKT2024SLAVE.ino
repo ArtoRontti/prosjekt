@@ -7,7 +7,6 @@ Zumo32U4OLED display;
 Zumo32U4Motors motors;
 Zumo32U4Encoders encoders;
 Zumo32U4LineSensors lineSensors;
-Zumo32U4ButtonC buttonc;
 
 bool sportMode = false;
 bool EcoMode = false;
@@ -22,6 +21,9 @@ int EcoSpeed = 200;
 bool w = false;
 bool s = false;
 bool x = false;
+
+//charging
+bool charge = false;
 
 unsigned long accelerationStart;
 unsigned long decelerationStart;
@@ -57,7 +59,7 @@ void setup() {
   Serial.println("Setup initiated..");
   Wire.begin(8);  // Zumo I2C address
   Wire.onReceive(receiveEvent);
-  Wire.onRequest(sendData); //sends speed to esp on request
+  Wire.onRequest(sendData);  //sends speed to esp on request
 
   encoders.init();
   display.init();
@@ -80,10 +82,12 @@ void loop() {
   battery_level = UpdateBattery(speed, battery_level);
   powerRemaining = (battery_level / 100) * 82;  // 82 kWh i en elbils batteri (fra Tesla)
 
-  if (buttonc.getSingleDebouncedRelease()) {  //Knapp for å lade bilen og betale
+  if (charge) {  //Knapp for å lade bilen og betale
     wallet = UpdateWallet(battery_level, discount, wallet, elPrice);
     discount = 0;
     battery_level = 100;
+    Serial.println("Charging initiated");
+    charge = false;
   }
 
   acceleration();
@@ -148,6 +152,9 @@ void receiveEvent() {
         s = false;
         x = true;
         motors.setSpeeds(0, 0);
+        break;
+      case '1':
+        charge = true;
         break;
       default:  // Stop
         motors.setSpeeds(0, 0);
@@ -297,7 +304,7 @@ void sendData() {
   Wire.write(highByte);  // Send the high byte
   Wire.write(lowByte);
   Wire.write(sendSpeed);
-  Serial.println(sendSpeed);
+  //Serial.println(sendSpeed);
 }
 
 float UpdateDiscount(float Speed, float discount) {  //Oppdaterer discount variebelen basert på akselerasjon
