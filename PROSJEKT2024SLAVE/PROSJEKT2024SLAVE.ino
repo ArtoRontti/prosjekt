@@ -46,6 +46,11 @@ float powerRemaining = 0;
 float lastPower = 0;
 float powerUsed = 0;
 
+//Discount
+float discount;
+float wallet = 100;
+float elPrice = 5;
+
 void setup() {
   Serial.begin(115200);
   Serial.println("Setup initiated..");
@@ -65,7 +70,8 @@ void loop() {
   sendData();
 
   if (millis() - LAST_TIME >= 100) {                                        // moving average update speed every 100 ms (20 data points)
-    speed = UpdateSpeed(speed, counter, total_speed, millis(), LAST_TIME);  // returnerer en float
+    speed = UpdateSpeed(speed, counter, total_speed, millis(), LAST_TIME);// returnerer en float
+    discount = UpdateDiscount(speed, discount);
     powerUsed = (lastPower - powerRemaining) / 0.1;                         // kWh/s (eller effekt/forbruk)
     lastPower = powerRemaining;
     LAST_TIME = millis();
@@ -73,6 +79,11 @@ void loop() {
   battery_level = UpdateBattery(speed, battery_level);
   powerRemaining = (battery_level / 100) * 82;  // 82 kWh i en elbils batteri (fra Tesla)
 
+  if (buttonA.getSingleDebouncedRelease()){  //Knapp for å lade bilen og betale
+    wallet = UpdateWallet(battery_level, discount, wallet, elPrice);
+    discount = 0;
+    battery_level = 100;
+  }
   acceleration();
 
 
@@ -285,6 +296,25 @@ void sendData() {
   Wire.write(lowByte);
   Wire.write(sendSpeed);
   Serial.println(sendSpeed);
+}
+
+float UpdateDiscount(float Speed, float discount){//Oppdaterer discount variebelen basert på akselerasjon
+  static float lastSpeed;
+  if(abs(speed - lastSpeed) <= 0.5 && abs(speed - lastSpeed) != 0){
+    discount += (1/100);
+  }
+  if (discount >= 0.20){
+    discount = 0.20;
+  }
+  lastSpeed = abs(Speed);
+  return discount;
+}
+
+float UpdateWallet(float battery_level, float discount, float wallet, float elPrice){ //funksjon som oppdaterer kontoenbasert på mengde ladet, strømpris og discount
+  float amount = 100 - battery_level;
+  float kwh = (amount / 100) * 82;
+  wallet -= (kwh*elPrice - (kwh*elPrice*discount));
+  return wallet;
 }
 
 void acceleration() {
