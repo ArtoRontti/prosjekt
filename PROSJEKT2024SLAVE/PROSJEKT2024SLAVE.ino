@@ -26,7 +26,10 @@ unsigned long accelerationStart;
 unsigned long decelerationStart;
 int targetSpeed;
 int accelerationVariable;
-float speed = 300;
+//float speed = 300.00;
+float speed = 0.0;
+float previousSpeed;
+float newSpeed = 00.00;
 
 float LAST_TIME = 0;    // brukt for a oppdatere speed hver 100 ms
 float total_speed = 0;  //for moving average
@@ -37,9 +40,6 @@ float battery_level = 100;
 //line follower
 unsigned int lineSensorValues[5];
 int16_t lastError = 0;
-
-//I2C
-static int previousSpeed = 0;  // Initialize previous speed
 
 //kWh/s
 float powerRemaining = 0;
@@ -128,7 +128,6 @@ void receiveEvent() {
         break;
       case 'c':
         calibrate();
-        mode = 'f';
         break;
       case 'x':
         //accelerationVariable = 3;
@@ -278,12 +277,14 @@ void BatteryStatusDisplay(float battery_level, float account_balance, float CURR
 }
 
 void sendData() {
-  if (accelerationSpeed != previousSpeed) {  // Check if speed has changed
-    Wire.write(accelerationSpeed);
-    Wire.endTransmission();
-    Serial.println(accelerationSpeed);
-  }
-  previousSpeed = accelerationSpeed;  // Update previous speed
+  int sendSpeed = speed * 100; //make float speed to ant integer
+  byte highByte = highByte(sendSpeed);  // Get the high byte
+  byte lowByte = lowByte(sendSpeed);    // Get the low byte
+
+  Wire.write(highByte);  // Send the high byte
+  Wire.write(lowByte);
+  Wire.write(sendSpeed);
+  Serial.println(sendSpeed);
 }
 
 void acceleration() {
@@ -299,7 +300,18 @@ void acceleration() {
       accelerationStart = millis();
     }
   }
-  if(x){
+  if (x) {
     accelerationSpeed = 0;
+  }
+  if (s) {
+    if (millis() - accelerationStart >= 10) {
+      if (accelerationSpeed < targetSpeed) {
+        accelerationSpeed -= accelerationVariable;
+      }
+      if (accelerationSpeed >= targetSpeed) {
+        accelerationSpeed = targetSpeed;
+      }
+      accelerationStart = millis();
+    }
   }
 }
