@@ -7,6 +7,7 @@ Zumo32U4OLED display;
 Zumo32U4Motors motors;
 Zumo32U4Encoders encoders;
 Zumo32U4LineSensors lineSensors;
+Zumo32U4ButtonC buttonc;
 
 bool sportMode = false;
 bool EcoMode = false;
@@ -56,7 +57,7 @@ void setup() {
   Serial.println("Setup initiated..");
   Wire.begin(8);  // Zumo I2C address
   Wire.onReceive(receiveEvent);
-  Wire.onRequest(sendData);
+  Wire.onRequest(sendData); //sends speed to esp on request
 
   encoders.init();
   display.init();
@@ -70,20 +71,21 @@ void loop() {
   sendData();
 
   if (millis() - LAST_TIME >= 100) {                                        // moving average update speed every 100 ms (20 data points)
-    speed = UpdateSpeed(speed, counter, total_speed, millis(), LAST_TIME);// returnerer en float
+    speed = UpdateSpeed(speed, counter, total_speed, millis(), LAST_TIME);  // returnerer en float
     discount = UpdateDiscount(speed, discount);
-    powerUsed = (lastPower - powerRemaining) / 0.1;                         // kWh/s (eller effekt/forbruk)
+    powerUsed = (lastPower - powerRemaining) / 0.1;  // kWh/s (eller effekt/forbruk)
     lastPower = powerRemaining;
     LAST_TIME = millis();
   }
   battery_level = UpdateBattery(speed, battery_level);
   powerRemaining = (battery_level / 100) * 82;  // 82 kWh i en elbils batteri (fra Tesla)
 
-  if (buttonA.getSingleDebouncedRelease()){  //Knapp for å lade bilen og betale
+  if (buttonc.getSingleDebouncedRelease()) {  //Knapp for å lade bilen og betale
     wallet = UpdateWallet(battery_level, discount, wallet, elPrice);
     discount = 0;
     battery_level = 100;
   }
+
   acceleration();
 
 
@@ -129,10 +131,10 @@ void receiveEvent() {
         w = false;
         break;
       case 'a':  // Turn left
-        motors.setSpeeds(-accelerationSpeed, accelerationSpeed);
+        motors.setSpeeds(-200, 200);
         break;
       case 'd':  // Turn right
-        motors.setSpeeds(accelerationSpeed, -accelerationSpeed);
+        motors.setSpeeds(200, -200);
         break;
       case 'f':
         FollowLine();
@@ -288,7 +290,7 @@ void BatteryStatusDisplay(float battery_level, float account_balance, float CURR
 }
 
 void sendData() {
-  int sendSpeed = speed * 100; //make float speed to ant integer
+  int sendSpeed = speed * 100;          //makes float speed to ant integer
   byte highByte = highByte(sendSpeed);  // Get the high byte
   byte lowByte = lowByte(sendSpeed);    // Get the low byte
 
@@ -298,28 +300,29 @@ void sendData() {
   Serial.println(sendSpeed);
 }
 
-float UpdateDiscount(float Speed, float discount){//Oppdaterer discount variebelen basert på akselerasjon
+float UpdateDiscount(float Speed, float discount) {  //Oppdaterer discount variebelen basert på akselerasjon
   static float lastSpeed;
-  if(abs(speed - lastSpeed) <= 0.5 && abs(speed - lastSpeed) != 0){
-    discount += (1/100);
+  if (abs(speed - lastSpeed) <= 0.5 && abs(speed - lastSpeed) != 0) {
+    discount += (1 / 100);
   }
-  if (discount >= 0.20){
+  if (discount >= 0.20) {
     discount = 0.20;
   }
   lastSpeed = abs(Speed);
   return discount;
 }
 
-float UpdateWallet(float battery_level, float discount, float wallet, float elPrice){ //funksjon som oppdaterer kontoenbasert på mengde ladet, strømpris og discount
+float UpdateWallet(float battery_level, float discount, float wallet, float elPrice) {  //funksjon som oppdaterer kontoen basert på mengde ladet, strømpris og discount
   float amount = 100 - battery_level;
   float kwh = (amount / 100) * 82;
-  wallet -= (kwh*elPrice - (kwh*elPrice*discount));
+  wallet -= (kwh * elPrice - (kwh * elPrice * discount));
   return wallet;
 }
 
 void acceleration() {
   //forward
   if (w) {
+    s = false;
     if (millis() - accelerationStart >= 10) {
       if (accelerationSpeed < targetSpeed) {
         accelerationSpeed += accelerationVariable;
@@ -334,14 +337,15 @@ void acceleration() {
     accelerationSpeed = 0;
   }
   if (s) {
-    if (millis() - accelerationStart >= 10) {
+    w = false;
+    if (millis() - decelerationStart >= 10) {
       if (accelerationSpeed < targetSpeed) {
         accelerationSpeed -= accelerationVariable;
       }
       if (accelerationSpeed >= targetSpeed) {
         accelerationSpeed = targetSpeed;
       }
-      accelerationStart = millis();
+      decelerationStart = millis();
     }
   }
 }
