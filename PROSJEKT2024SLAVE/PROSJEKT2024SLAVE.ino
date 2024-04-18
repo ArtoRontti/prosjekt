@@ -128,6 +128,7 @@ void receiveEvent() {
         break;
       case 'c':
         calibrate();
+        mode = 'f';
         break;
       case 'x':
         //accelerationVariable = 3;
