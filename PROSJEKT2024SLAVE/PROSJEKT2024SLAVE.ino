@@ -54,6 +54,17 @@ float discount;
 float wallet = 100;
 float elPrice = 5;
 
+float test = 0.00;
+
+/////////////////////////////////////////////////////////////////////////////
+struct sendInfo{
+  float s;
+  float d;
+  float p;
+};
+
+sendInfo info;
+
 void setup() {
   Serial.begin(115200);
   Serial.println("Setup initiated..");
@@ -233,6 +244,8 @@ float UpdateSpeed(float speed, int counter, float total_speed, float CURRENT_TIM
   float moving = (rotationsRight != 0 || rotationsLeft != 0);
   float distanceRight = rotationsRight * (3.5 * 3.14);              // centimeters (3.5 cm)
   float distanceLeft = rotationsLeft * (3.5 * 3.14);                // centimeters
+  test +=distanceLeft;
+  Serial.println(test);
   float distanceDifferential = (distanceRight + distanceLeft) / 2;  // in centimeters
   // float distanceTraveled += (distanceRight + distanceLeft) / (2 * 100);       // in meters
   speed = (1000 * (distanceDifferential)) / (CURRENT_TIME - LAST_TIME);  // dv/dt = (avg(dr,dl)) / dt (cm / s) *1000 since CURRENT_TIME is ms
@@ -296,15 +309,14 @@ void BatteryStatusDisplay(float battery_level, float account_balance, float CURR
   display.print("sec");
 }
 
-void sendData() {
-  int sendSpeed = speed * 100;          //makes float speed to ant integer
-  byte highByte = highByte(sendSpeed);  // Get the high byte
-  byte lowByte = lowByte(sendSpeed);    // Get the low byte
+void sendData() { //struct message makes sending different values from same slave address much easier
+  info.s = speed;  
+  info.d = discount;
+  info.p = battery_level;
 
-  Wire.write(highByte);  // Send the high byte
-  Wire.write(lowByte);
-  Wire.write(sendSpeed);
-  //Serial.println(sendSpeed);
+  size_t structSize = sizeof(info);
+
+  Wire.write((uint8_t*)&info, structSize);
 }
 
 float UpdateDiscount(float Speed, float discount) {  //Oppdaterer discount variebelen basert på akselerasjon
