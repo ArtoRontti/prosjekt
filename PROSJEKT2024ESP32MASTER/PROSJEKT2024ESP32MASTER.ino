@@ -42,7 +42,16 @@ String generateBatteryHTML(float receivedBattery) {
   String html;
   html += "<h2>Battery Level: " + String(receivedBattery) + "%</h2>";
   html += "<div style='background-color: #f1f1f1; width: 150px; border: 1px solid #ddd; border-radius: 5px;'>";
-  html += "<div style='height: 15px; width: " + String(receivedBattery) + "%; background-color: green; border-radius: 5px;'></div>";
+  //makes the battery indicator change color for dramatic effect
+  if (receivedBattery > 60) { // battery indicator is green when its over 60%
+    html += "<div style='height: 15px; width: " + String(receivedBattery) + "%; background-color: green; border-radius: 5px;'></div>";
+  }
+  if (receivedBattery <= 60 && receivedBattery > 10) { //yellow below 60%
+    html += "<div style='height: 15px; width: " + String(receivedBattery) + "%; background-color: yellow; border-radius: 5px;'></div>";
+
+  } else if (receivedBattery <= 10) {  //red below 10%
+    html += "<div style='height: 15px; width: " + String(receivedBattery) + "%; background-color: red; border-radius: 5px;'></div>";
+  }
   html += "</div>";
   return html;
 }
@@ -163,7 +172,7 @@ void setup() {
     server.send(200, "text/html", content);
   });
 
-  
+
 
   server.on("/key", HTTP_GET, []() {
     if (server.hasArg("key")) {
