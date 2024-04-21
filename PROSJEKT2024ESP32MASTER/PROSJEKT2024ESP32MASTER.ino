@@ -20,14 +20,32 @@ const char* VARIABLE_LABELD = "discount";
 const char* VARIABLE_LABELE = "strompris";
 Ubidots ubidots(UBIDOTS_TOKEN);
 
-//I2C
-int newReceivedSpeed;
-int receivedSpeed;
-float actualSpeed;
+//disocunt
+float discount = 0;
 
-//discount
-float discount;
-float lastDiscountValue;
+//I2C
+float newBattery = 0;
+float newSpeed = 0;
+float newDiscount = 0;
+float receivedBattery;
+float receivedDiscount;
+
+struct sendInfo {
+  float s;
+  float d;
+  float p;
+};
+
+sendInfo info;
+
+String generateBatteryHTML(float receivedBattery) {
+  String html;
+  html += "<h2>Battery Level: " + String(receivedBattery) + "%</h2>";
+  html += "<div style='background-color: #f1f1f1; width: 150px; border: 1px solid #ddd; border-radius: 5px;'>";
+  html += "<div style='height: 15px; width: " + String(receivedBattery) + "%; background-color: green; border-radius: 5px;'></div>";
+  html += "</div>";
+  return html;
+}
 
 void setup() {
 
@@ -69,10 +87,10 @@ void setup() {
     content += ".keyboard {";
     content += "  display: grid;";
     content += "  grid-template-columns: repeat(4, 60px);";  // 4 columns
-    content += "  grid-gap: 10px;";                          // spacing between keys
+    content += "  grid-gap: 15px;";                          // spacing between keys
     content += "}";
     content += ".key {";
-    content += "  width: 100%;";
+    content += "  width: 70px;";
     content += "  height: 60px;";
     content += "  border: 2px solid #000;";
     content += "  text-align: center;";
@@ -84,8 +102,8 @@ void setup() {
     content += "}";
     content += "</style>";
     content += "</head><body>";
-    content += "<h1>Zumo controls</h1>";
-    content += "<h2>Use the following keys to control the Zumo:</h2>";
+    content += "<h1>Cockpit</h1>";
+    content += "<h2>Controls</h2>";
     content += "<div class='keyboard'>";
     content += "<div id='keyW' class='key'>W</div>";  // Add an id to each key for easier manipulation
     content += "<div id='keyA' class='key'>A</div>";
@@ -96,19 +114,22 @@ void setup() {
     // acceleration buttons
     content += "</style>";
     content += "</head><body>";
-    content += "<h2>Acceleration controls</h2>";
+    content += "<h2>Acceleration modes</h2>";
     content += "<div class ='keyboard'>";
     content += "<div id='keyH' class='key'>Sport</div>";    //H button for high acceleration/sport mode
     content += "<div id='keyL' class='key'>Eco</div>";      //L button for low acceleration/eco mode
     content += "<div id='keyN' class='key'>regular</div>";  // N button for regular acceleration/ regular mode
     content += "</div>";
     content += "</body></html>";
+    //display battery level
+    content += generateBatteryHTML(receivedBattery);  // to be able to update and show realtime battery level
     // charge buttons
     content += "</style>";
     content += "</head><body>";
     content += "<h2>charging</h2>";
     content += "<div class ='keyboard'>";
     content += "<div id='key1' class='key'>Charge</div>";  //1 for regular charge
+    content += "<div id='key2' class='key'>Car2Car</div";  //2 for car to car charge
     content += "</div>";
     content += "</body></html>";
 
@@ -142,6 +163,8 @@ void setup() {
     server.send(200, "text/html", content);
   });
 
+  
+
   server.on("/key", HTTP_GET, []() {
     if (server.hasArg("key")) {
       String key = server.arg("key");
@@ -151,11 +174,10 @@ void setup() {
       Wire.write(key[0]);                                     //sends one byte. the first of the key that gets pressed
       Wire.endTransmission();
 
-      if(key == "1"){
-        discount = 0.00; // resets charging discount after charging to promote economic driving
+      if (key == "1") {
+        receivedDiscount = 0.00;  // resets charging discount after charging to promote economic driving
       }
-    } 
-    else {
+    } else {
       server.send(400, "text/plain", "Bad request");
     }
   });
@@ -188,51 +210,41 @@ void loop() {
   ubidots.loop();
 
   receiveData();
-  sendToUbidots();
-
-  discount = UpdateDiscount(actualSpeed, discount);
 }
+
 
 void receiveData() {
-  if (Wire.available() <= 3) {
-    Wire.requestFrom(8, 3);
-    byte highByte = Wire.read();  //arrange bytes
-    byte lowByte = Wire.read();
-    byte thirdByte = Wire.read();
-    int receivedSpeed = (highByte << 8) | lowByte;
-    actualSpeed = float(receivedSpeed) / 100;  // make int to float
+  Wire.requestFrom(8, sizeof(info));  // Request data from slave address 8
 
-
-    if (newReceivedSpeed != receivedSpeed) {  //checks received integer
-      if (actualSpeed <= 65.00) {             //avoiding false values, since 65cm/s is the biggest possible value
-        Serial.println("Speed:");
-        Serial.println(actualSpeed);          //prints converted float
-        ubidots.add(VARIABLE_LABEL, actualSpeed);
-        ubidots.publish();  //only pusblishes whe the speed changes, because of the 4000 dots per day limit
-      }
-    }
-    newReceivedSpeed = receivedSpeed;
+  if (Wire.available() != sizeof(info)) {  //checks that the size matches
+    Serial.println("Received data size does not match struct size!");
+    return;
   }
-}
 
-float UpdateDiscount(float actualSpeed, float discount) {  //Oppdaterer discount variebelen basert på akselerasjon
-  static float lastSpeed;
-  if (abs(actualSpeed - lastSpeed) <= 0.5 && abs(actualSpeed - lastSpeed) != 0) {
-    discount += (1.0 / 100.0);
-  }
-  if (discount >= 0.20) {
-    discount = 0.20;
-  }
-  lastSpeed = abs(actualSpeed);
-  return discount;
-}
+  Wire.readBytes((uint8_t*)&info, sizeof(sendInfo));  // reads the received info
 
-void sendToUbidots() {
-  if (lastDiscountValue != discount) {
-    Serial.println("Discount: ");
-    Serial.println(discount);
-    ubidots.add(VARIABLE_LABELD, discount);
+  //access received data
+  float receivedSpeed = info.s;
+  receivedDiscount = info.d;
+  receivedBattery = info.p;
+
+  if (receivedSpeed != newSpeed) {
+    Serial.print("Speed: ");
+    Serial.println(receivedSpeed);
+    ubidots.add(VARIABLE_LABEL, receivedSpeed);
     ubidots.publish();
+    newSpeed = receivedSpeed;
   }
-    lastDiscountValue = discount;
+
+  if (receivedDiscount != newDiscount) {
+    Serial.print("Discount: ");
+    Serial.println(receivedDiscount);
+    ubidots.add(VARIABLE_LABELD, receivedDiscount);
+    ubidots.publish();
+    newDiscount = receivedDiscount;
+  }
+
+  if (receivedBattery != newBattery) {
+    newBattery = receivedBattery;
+  }
 }
