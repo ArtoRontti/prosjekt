@@ -42,8 +42,8 @@ sendInfo info;
 
 String generateBatteryHTML(float receivedBattery) {
   String content;
-  content += "<div style='grid-column: 14; grid-row: 26; background-color: transparent; width: 150px; border: 1px solid transparent; border-radius: 5px;'>"; // battery bar
-  content += "<div style='color: yellow; grid-column: 14; grid-row: 28;'><h3>" + String(receivedBattery) + "%</h3>"; // place text and make it yellow for better visibility
+  content += "<div style='grid-column: 15; grid-row: 26; background-color: transparent; width: 150px; border: 1px solid transparent; border-radius: 5px;'>"; // battery bar
+  content += "<div style='color: yellow; grid-column: 15; grid-row: 28;'><h3>" + String(receivedBattery) + "%</h3>"; // place text and make it yellow for better visibility
 
   //makes the battery indicator change color for dramatic effect
   if (receivedBattery > 60) {  // battery indicator is green when its over 60%
@@ -135,8 +135,8 @@ void setup() {
     content += "<div id='keyL' class='key' style ='grid-column: 6; grid-row: 24;'>Eco</div>";     // L for Eco mode/eco acceleration
     content += "<div id='keyN' class='key' style ='grid-column: 6; grid-row: 26;'>regular</div>";  // N button for regular acceleration/ regular mode
     //charging modes
-    content += "<div id='key1' class='key' style ='grid-column: 14; grid-row: 22;'>Charge</div>";   //1 for regular charge
-    content += "<div id='key2' class='key'style ='grid-column: 14; grid-row: 24;'>Car2Car</div>";  //2 for car to car charge
+    content += "<div id='key1' class='key' style ='grid-column: 15; grid-row: 22;'>Charge</div>";   //1 for regular charge
+    content += "<div id='key2' class='key'style ='grid-column: 15; grid-row: 24;'>Car2Car</div>";  //2 for car to car charge
     //update battery level on website
     content += generateBatteryHTML(receivedBattery);  // to be able to update and show realtime battery level
     content += "</div>";
