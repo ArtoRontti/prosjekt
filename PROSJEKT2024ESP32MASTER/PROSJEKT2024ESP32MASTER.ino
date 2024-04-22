@@ -18,12 +18,18 @@ const char* DEVICE_LABEL = "esp32";
 const char* VARIABLE_LABEL = "Akselerasjon";
 const char* VARIABLE_LABELD = "discount";
 const char* VARIABLE_LABELE = "strompris";
+const char* VARIABLE_LABELK = "klokkeslett";
 Ubidots ubidots(UBIDOTS_TOKEN);
 
 //discount
 float discount;
 float yourElPrice;
 float elPrice;
+float hour;
+
+// Simulert klokkeverdi
+unsigned long pastMillis = 0;
+const long timeIntervalMillis = 10000; // hver 10 sec er en time i "døgnet"
 
 //I2C
 float newBattery = 0;
@@ -208,19 +214,51 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print(payloadStr);
 }
 
+  // Simuler strømprisen basert på tidspunktet på dagen
+  // Her simuleres prisendringer gjennom dagen i tre faser, kan evnt legge til flere 
+float simulertStromPris(float hour) {
+  float price = 0.0;
+
+  if (hour >= 0 && hour < 6) {
+    // Lav strømpris om natten
+    price = 25;
+  } else if (hour >= 6 && hour < 18) {
+    // Høy strømpris på dagen
+    price = 50;
+  } else {
+    // Lav strømpris om kvelden
+    price = 30;
+  }
+  return price;
+}
+
 void loop() {
   server.handleClient();
-
+  unsigned long currentFutureMillis = millis();
+   
+  //millis for tida i byen
+  if (currentFutureMillis - pastMillis >= timeIntervalMillis) {
+    pastMillis = currentFutureMillis;
+    hour += 1; // time variabelen øker for hver "time" som går
+    if (hour > 24) {
+      hour = 0; // Nullstill time etter 24 timer altså når vi begynner på ny dag
+    }
+    elPrice = simulertStromPris(hour);
+    ubidots.add(VARIABLE_LABELK, hour);
+    ubidots.add(VARIABLE_LABELE, elPrice);
+  }
   if (!ubidots.connected()) {
     ubidots.reconnect();
     ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABEL);
     ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABELD);
     ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABELE);
+    ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABELK);    
   }
   ubidots.loop();
 
   receiveData();
 }
+
 
 
 void receiveData() {
