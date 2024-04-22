@@ -35,6 +35,7 @@ float previousSpeed;
 float newSpeed = 00.00;
 
 float LAST_TIME = 0;    // brukt for a oppdatere speed hver 100 ms
+float LAST_TIME1 = 0;
 float total_speed = 0;  //for moving average
 int counter = 0;
 
@@ -85,10 +86,16 @@ void loop() {
 
   if (millis() - LAST_TIME >= 100) {                                        // moving average update speed every 100 ms (20 data points)
     speed = UpdateSpeed(speed, counter, total_speed, millis(), LAST_TIME);  // returnerer en float
-    discount = UpdateDiscount(speed, discount);
+    Serial.print("DIscount: ");
+    Serial.println(discount);
     powerUsed = (lastPower - powerRemaining) / 0.1;  // kWh/s (eller effekt/forbruk)
     lastPower = powerRemaining;
     LAST_TIME = millis();
+  }
+
+  if(millis() - LAST_TIME1 >= 300){
+    discount = UpdateDiscount(speed, discount);
+    LAST_TIME1 = millis();
   }
   battery_level = UpdateBattery(speed, battery_level);
   powerRemaining = (battery_level / 100) * 82;  // 82 kWh i en elbils batteri (fra Tesla)
@@ -100,7 +107,6 @@ void loop() {
     Serial.println("Charging initiated");
     charge = false;
   }
-
   acceleration();
 
 
@@ -245,7 +251,7 @@ float UpdateSpeed(float speed, int counter, float total_speed, float CURRENT_TIM
   float distanceRight = rotationsRight * (3.5 * 3.14);              // centimeters (3.5 cm)
   float distanceLeft = rotationsLeft * (3.5 * 3.14);                // centimeters
   test +=distanceLeft;
-  Serial.println(test);
+  //Serial.println(test);
   float distanceDifferential = (distanceRight + distanceLeft) / 2;  // in centimeters
   // float distanceTraveled += (distanceRight + distanceLeft) / (2 * 100);       // in meters
   speed = (1000 * (distanceDifferential)) / (CURRENT_TIME - LAST_TIME);  // dv/dt = (avg(dr,dl)) / dt (cm / s) *1000 since CURRENT_TIME is ms
@@ -315,14 +321,13 @@ void sendData() { //struct message makes sending different values from same slav
   info.p = battery_level;
 
   size_t structSize = sizeof(info);
-
   Wire.write((uint8_t*)&info, structSize);
 }
 
 float UpdateDiscount(float Speed, float discount) {  //Oppdaterer discount variebelen basert på akselerasjon
   static float lastSpeed;
-  if (abs(speed - lastSpeed) <= 0.5 && abs(speed - lastSpeed) != 0) {
-    discount += (1 / 100);
+  if (abs(speed - lastSpeed) <= 0.3 && abs(speed - lastSpeed) != 0) {
+    discount += (1.0 / 1000.0);
   }
   if (discount >= 0.20) {
     discount = 0.20;
