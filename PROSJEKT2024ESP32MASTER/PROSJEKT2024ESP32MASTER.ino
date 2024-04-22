@@ -95,6 +95,7 @@ void setup() {
   //self made website to control zumo
   server.on("/", HTTP_GET, []() {
     String content = "<html><head><title>Arduino Keyboard</title>";
+    content += "<meta http-equiv='refresh' content='1'>"; // refresh website every second
     content += "<style>";
     content += "body{";
     content += "background-image: url('https://img.freepik.com/premium-photo/detailed-look-inside-futuristic-racing-formula-car-s-cockpit-highlighting-driver-s-focus_875722-4628.jpg');";  //background image
