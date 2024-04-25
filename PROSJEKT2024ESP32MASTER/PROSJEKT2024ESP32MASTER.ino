@@ -299,8 +299,8 @@ void loop() {
   receiveData();
   //outgoing data esp now
   espNowSendData();
-  carToCarStart();
-  carToCarStop();
+  carToCarSend();
+  carToCarReceive();
 }
 
 
@@ -357,7 +357,7 @@ void espNowSendData() {
   }
 }
 
-void carToCarStart() {
+void carToCarSend() {
   if (car2car) {
     strcpy(outgoingData.msg1, "Car2Car charge initiated");
     if (millis() % 1000 == 0) {
@@ -366,18 +366,21 @@ void carToCarStart() {
         strcpy(outgoingData.msg1, "Charging finito");
         car2car = false;
       }
-      if (incomingMsg1 == "Car2Car stop") {
+      else if(incomingMsg1 == "Max charge received"){
         car2car = false;
       }
     }
   }
 }
 
-void carToCarStop() {
-  if (car2car) {
-    if (receivedBattery <= 50 || receivedBattery == 100) {
-      strcpy(outgoingData.msg1, "Charging finito");
-      car2car = false;
+void carToCarReceive() {
+  if(strcpy(outgoingData.msg1, "CarToCar charge available") && incomingMsg1 == "Car2Car charge initiated"){
+    if(millis() % 1000 == 0){
+      receivedBattery -=1;
+      if(receivedBattery <= 50){
+        strcpy(outgoingData.msg1, "Max charge received");
+        car2car = false;
+      }
     }
   }
 }
