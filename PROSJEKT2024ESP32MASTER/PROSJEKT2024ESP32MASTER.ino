@@ -60,8 +60,8 @@ String generateBatteryHTML(float receivedBattery) {
 
 //////////////esp now///////////////////
 
-//broadcast address need to be the same for both zumo's
-uint8_t broadcastAddress[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+
+uint8_t broadcastAddress[] = { 0x44, 0x17, 0x93, 0x5e, 0x45, 0x0c };  // addresse til motpart
 
 // Variable to store if sending data was successful
 String success;
@@ -75,6 +75,7 @@ typedef struct struct_message {
 struct_message incomingData;
 struct_message outgoingData;
 bool car2car = false;
+bool FromCar2Car = false;
 
 char incomingMsg1[100];  //100 byte message
 char incomingMsg2[100];
@@ -94,6 +95,9 @@ void OnDataRecv(const uint8_t* mac, const uint8_t* incomingData, int len) {
   // Cast incomingData to the struct_message type
   struct_message* receivedData = (struct_message*)incomingData;
 
+  strcpy(incomingMsg1, receivedData->msg1);
+  strcpy(incomingMsg2, receivedData->msg2);
+
   Serial.print("Bytes received: ");
   Serial.println(len);
   // Print the received messages
@@ -104,6 +108,7 @@ void OnDataRecv(const uint8_t* mac, const uint8_t* incomingData, int len) {
 }
 
 // esp now FINITO//////////////////
+unsigned long espNowMillis;
 
 esp_now_peer_info_t peerInfo;
 void setup() {
@@ -209,8 +214,8 @@ void setup() {
     content += "<div id='keyL' class='key' style ='grid-column: 6; grid-row: 24;'>Eco</div>";      // L for Eco mode/eco acceleration
     content += "<div id='keyN' class='key' style ='grid-column: 6; grid-row: 26;'>regular</div>";  // N button for regular acceleration/ regular mode
     //charging modes
-    content += "<div id='key1' class='key' style ='grid-column: 15; grid-row: 22;'>Charge</div>";  //1 for regular charge
-    content += "<div id='key2' class='key'style ='grid-column: 15; grid-row: 24;'>Car2Car</div>";  //2 for car to car charge
+    content += "<div id='key1' class='key' style ='grid-column: 15; grid-row: 22;'>Charge</div>";   //1 for regular charge
+    content += "<div id='key2' class='key' style ='grid-column: 15; grid-row: 24;'>Car2Car</div>";  //2 for car to car charge
     //update battery level on website
     content += generateBatteryHTML(receivedBattery);  // to be able to update and show realtime battery level
     content += "</div>";
@@ -261,7 +266,7 @@ void setup() {
         receivedDiscount = 0.00;  // resets charging discount after charging to promote economic driving
       }
 
-      else if (incomingMsg1 == "Car2Car charge available" && key == "2") {
+      else if (key == "2") {
         car2car = true;
       }
     } else {
@@ -297,10 +302,9 @@ void loop() {
   ubidots.loop();
 
   receiveData();
-  //outgoing data esp now
-  espNowSendData();
-  carToCarSend();
+
   carToCarReceive();
+  CarToCarSend();
 }
 
 
@@ -342,44 +346,43 @@ void receiveData() {
   }
 }
 
-void espNowSendData() {
-  if (millis() % 5000 == 0) {
-    if (receivedBattery >= 80) {
-      strcpy(outgoingData.msg1, "Car2Car charging available");
-      strcpy(outgoingData.msg2, "accept?");
-      esp_err_t result = esp_now_send(broadcastAddress, (uint8_t*)&outgoingData, sizeof(outgoingData));
-      if (result == ESP_OK) {
-        Serial.println("Sent with success");
-      } else {
-        Serial.println("Error sending the data");
-      }
-    }
-  }
-}
-
-void carToCarSend() {
-  if (car2car) {
-    strcpy(outgoingData.msg1, "Car2Car charge initiated");
-    if (millis() % 1000 == 0) {
-      receivedBattery += 1;
-      if (receivedBattery == 100) {
-        strcpy(outgoingData.msg1, "Charging finito");
-        car2car = false;
-      }
-      else if(incomingMsg1 == "Max charge received"){
-        car2car = false;
-      }
-    }
-  }
-}
-
 void carToCarReceive() {
-  if(strcpy(outgoingData.msg1, "CarToCar charge available") && incomingMsg1 == "Car2Car charge initiated"){
-    if(millis() % 1000 == 0){
-      receivedBattery -=1;
-      if(receivedBattery <= 50){
-        strcpy(outgoingData.msg1, "Max charge received");
-        car2car = false;
+
+  if (car2car) {
+    FromCar2Car = false;
+  }
+
+  if (strcmp(incomingMsg1, "Car2Car charging available") == 0) {
+    if (car2car) {
+      strcpy(outgoingData.msg1, "accepted car2car charge");
+      if (millis() % 5000 == 0) {  //5percent battery every 5 seconds
+        receivedBattery += 5.0;
+        if (receivedBattery >= 100){
+          strcpy(outgoingData.msg1, "car2car charge stopped");
+          car2car = false;  //stops charging when battery is full, or with stop command
+        }
+        else if(strcmp(incomingMsg1, "car2carCharge stopped")){
+          car2car = false;
+        }
+      }
+    }
+  }
+}
+
+void CarToCarSend() {
+
+  if (FromCar2Car) {
+    car2car = false;
+  }
+
+  if ((receivedBattery >= 50 && !car2car) && FromCar2Car) {
+    strcpy(outgoingData.msg1, "car2car charge available");
+    if (strcmp(incomingMsg1, "accepted car2car charge") == 0) {
+      if (millis() % 5000 == 0) {
+        receivedBattery -= 5.0;
+        if ((receivedBattery < 50) || strcmp(incomingData.msg1, "car2car charge stopped")) {
+          FromCar2Car = false;
+        }
       }
     }
   }
