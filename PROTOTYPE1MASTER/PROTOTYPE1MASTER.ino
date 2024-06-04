@@ -91,8 +91,6 @@ void setup() {
     content += "<div id='keyA' class='key'>A</div>";
     content += "<div id='keyS' class='key'>S</div>";
     content += "<div id='keyD' class='key'>D</div>";
-    content += "<div id ='keyF'class='key'>F</div>";
-    content += "<div id = 'keyC'class='key'>C</div>";
     content += "</div>";
     content += "</body></html>";
     // acceleration buttons
