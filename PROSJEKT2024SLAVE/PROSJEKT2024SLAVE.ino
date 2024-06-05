@@ -86,8 +86,6 @@ void loop() {
 
   if (millis() - LAST_TIME >= 100) {                                        // moving average update speed every 100 ms (20 data points)
     speed = UpdateSpeed(speed, counter, total_speed, millis(), LAST_TIME);  // returnerer en float
-    Serial.print("DIscount: ");
-    Serial.println(discount);
     powerUsed = (lastPower - powerRemaining) / 0.1;  // kWh/s (eller effekt/forbruk)
     lastPower = powerRemaining;
     LAST_TIME = millis();
@@ -162,10 +160,17 @@ void receiveEvent() {
         x = true;
         //motors.setSpeeds(0, 0);
         break;
-      case '1':
+      case '1': //battery charges fully
         charge = true;
         break;
-      case 'q':
+      case 'g'://battery is selling
+        battery_level -= 5.0;
+        Serial.println("g");
+        break;
+      case 'y'://battery is charging
+        battery_level += 5.0;
+        break;
+      case 'q': //"hand break"
         accelerationSpeed = 0;
         motors.setSpeeds(accelerationSpeed, accelerationSpeed);
         break;
