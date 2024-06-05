@@ -164,9 +164,6 @@ void setup() {
   Wire.begin();
   Serial.begin(115200);
 
-  //rgbSensor callibrering
-  //rgbSensorSetup();
-
   //ubidots
   ubidots.connectToWifi(ssid, password);
   ubidots.setCallback(callback);
@@ -240,8 +237,8 @@ void setup() {
     content += "<div id='keyN' class='key' style ='grid-column: 6; grid-row: 26;'>regular</div>";  // N button for regular acceleration/ regular mode
     //charging modes
     content += "<div id='key1' class='key' style ='grid-column: 15; grid-row: 22;'>Charge</div>";   //1 for regular charge
-    content += "<div id='key2' class='key' style ='grid-column: 15; grid-row: 24;'>Car2Car</div>";  //2 for car to car charge
-    content += "<div id='key3' class='key' style ='grid-column: 15; grid-row: 26;'>Car2Car</div>";  //3 for car to car charge
+    content += "<div id='key2' class='key' style ='grid-column: 15; grid-row: 24;'>FromCar</div>";  //2 for car to car charge
+    content += "<div id='key3' class='key' style ='grid-column: 17; grid-row: 26;'>ToCar</div>";  //3 for car to car charge
     //update battery level on website
     content += generateBatteryHTML(receivedBattery);  // to be able to update and show realtime battery level
     content += "</div>";
@@ -295,7 +292,7 @@ void setup() {
       else if (key == "2") {
         car2car = true;
       } else if (key == "3") {
-        FromCar2Car = 1;
+        FromCar2Car = true;
       }
     } else {
       server.send(400, "text/plain", "Bad request");
@@ -304,7 +301,7 @@ void setup() {
 
   server.begin();
   Serial.println("HTTP server started");
-  //rgbSensorSetup();
+  rgbSensorSetup();
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -321,17 +318,15 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 void loop() {
   server.handleClient();
-  /*if (!ubidots.connected()) {
+  if (!ubidots.connected()) {
     ubidots.reconnect();
-    ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABEL);
-    ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABELD);
-    ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABELE);
   }
-  ubidots.loop();*/
+  ubidots.loop();
+
   clockTime();
   receiveData();
   findAacceleration();
-  //zoneCheck();
+  zoneCheck();
   carToCarReceive();
   CarToCarSend();
 }
@@ -339,11 +334,6 @@ void loop() {
 
 void receiveData() {
   Wire.requestFrom(8, sizeof(info));  // Request data from slave address 8
-
-  /*if (Wire.available() != sizeof(info)) {  //checks that the size matches
-    Serial.println("Received data size does not match struct size!");
-    return;
-  }*/
 
   Wire.readBytes((uint8_t*)&info, sizeof(sendInfo));  // reads the received info
 
@@ -371,7 +361,7 @@ void receiveData() {
     newBattery = receivedBattery;
   }
 }
-float elPrice(float hour) {
+float elPrice(float hour) {//function for telling power price at differnt time of day
   float price = 0.0;
 
   if (hour >= 0 && hour < 6) {
@@ -387,9 +377,10 @@ float elPrice(float hour) {
   return price;
 }
 
-void clockTime(){
+void clockTime(){//clock function for an alternativ time.
+  //millis variables
   static unsigned long pastMillis = 0;
-  const unsigned long timeIntervalMillis = 10000;
+  const unsigned long timeIntervalMillis = 10000; //10 seconds reprsent 1 "hour".
     if (millis() - pastMillis >= timeIntervalMillis) {
     pastMillis = millis();
     hour += 1; // hour variable increas for every "hour"
@@ -405,68 +396,48 @@ void carToCarReceive() {
     FromCar2Car = false;
   }
 
-  if (strcmp(incomingMsg1, "car2car charge available") == 0) {
-    Serial.println("hei");
+  if ((strcmp(incomingMsg1, "car2car charge available") == 0)) {
     if (car2car) {
       strcpy(outgoingData.msg1, "accepted car2car charge");
+      //Serial.println("hei");
       espNowSend();
       if (millis() - lastMillisR >= chargeInterval) {  //5percent battery every 5 seconds
         lastMillisR = millis();
-        receivedBattery += 5.0;
-        if (receivedBattery >= 100) {
+        if (receivedBattery >= 94.0) {
           strcpy(outgoingData.msg1, "car2car charge stopped");
           espNowSend();
           car2car = false;  //stops charging when battery is full, or with stop command
-          receivedBattery = 100.0;
-        } else if (strcmp(incomingMsg1, "car2carCharge stopped")) {
+        }
+        else if ((strcmp(incomingMsg1, "car2carCharge stopped") == 0)) {
           car2car = false;
         }
+        Wire.beginTransmission(8);
+        Wire.write('y');
+        Wire.endTransmission();
       }
     }
   }
 }
 
 void CarToCarSend() {
-  /*
-  static bool selling = false;
-  static bool bying = false;
-  if(receivedBattery >= 50 && readyCar2carSend && !selling){
-    //send melding om at den kan selge
-    strcpy(outgoingData.msg1, "car2car charge available");
-    if (strcmp(incomingMsg1, "accepted car2car charge") == 0){
-      selling = true;
-    }
-  }
-  else if(selling){
-    if (millis() % 5000 == 0) {
-        receivedBattery -= 5.0;
-        if ((receivedBattery < 50) || strcmp(incomingData.msg1, "car2car charge stopped")) {
-          selling = false;
-        }
-      }
-  }
-  else if (car2car && !bying){
-    //sende melding om at den vil lade
-  }
-  else if(bying){
-
-  }
-  */
   static unsigned long lastMillisS = 0;
 
   if (FromCar2Car) {
     car2car = false;
   }
 
-  if ((receivedBattery >= 50) && FromCar2Car) {
-    //Serial.println("hei");
+  if ((receivedBattery >= 50.0) && FromCar2Car) {
     strcpy(outgoingData.msg1, "car2car charge available");
     espNowSend();
-    if (strcmp(incomingMsg1, "accepted car2car charge") == 0) {
-      if (millis() - lastMillisS >= 5000) {
+    if ((strcmp(incomingMsg1, "accepted car2car charge") == 0)) {
+      Serial.println("hei");
+      if (millis() - lastMillisS >= chargeInterval) {
+        Serial.println(millis() - lastMillisS);
         lastMillisS = millis();
-        receivedBattery -= 5.0;
-        if ((receivedBattery < 50) || strcmp(incomingData.msg1, "car2car charge stopped")) {
+        Wire.beginTransmission(8);
+        Wire.write('g');
+        Wire.endTransmission();
+        if ((receivedBattery <= 50.0) || (strcmp(incomingData.msg1, "car2car charge stopped")==0)) {
           FromCar2Car = false;
           strcpy(outgoingData.msg1, "car2car charge stopped");
           espNowSend();
@@ -476,7 +447,7 @@ void CarToCarSend() {
   }
 }
 
-void espNowSend(){
+void espNowSend(){//procedure for sending message with espNow
   esp_err_t result = esp_now_send(broadcastAddress, (uint8_t*)&outgoingData, sizeof(outgoingData));
       if (result == ESP_OK) {
         Serial.println("Sent with success");
@@ -510,6 +481,7 @@ void rgbSensorSetup() {
 }
 
 void zoneCheck() {
+  //Millis variabels
   static unsigned long lastUbiZone = 0;
   const unsigned long ubiZoneInterval = 10000;
   const int intervalRGBsensor = 100;
@@ -521,7 +493,7 @@ void zoneCheck() {
     if (!apds.readAmbientLight(ambient_light) || !apds.readRedLight(red_light) || !apds.readGreenLight(green_light) || !apds.readBlueLight(blue_light)) {
       Serial.println("Error reading light values");
     }
-    if (ambient_light > 5000) {
+    if (ambient_light > 5000) {//check wich light is strongest
       if (red_light > green_light + blue_light - 1000) {
         zone = 'r';
       } else if (green_light > red_light + blue_light - 2000) {
@@ -532,7 +504,7 @@ void zoneCheck() {
       Serial.println("You are in Zone: " + String(zone));
     }
   }
-  if (abs(acceleration) >= 2.25) {
+  if (abs(acceleration) >= 2.25) {//If acceleration is to high, flagg the zone
     if (zone == 'r') {
       redZone += 1;
     } else if (zone == 'g') {
@@ -540,10 +512,6 @@ void zoneCheck() {
     } else if (zone == 'b') {
       blueZone += 1;
     }
-    Serial.println("Aksele: " + String(acceleration));
-    Serial.println("redZ: " + String(redZone));
-    Serial.println("greenZ: " + String(greenZone));
-    Serial.println("blueZ: " + String(blueZone));
     if(millis() - lastUbiZone >= ubiZoneInterval){//Send zones to ubidots every 10 sec
       lastUbiZone = millis();
       ubidots.add(VARIABLE_LABELr, redZone);
@@ -553,7 +521,7 @@ void zoneCheck() {
     }
   }
 }
-void findAacceleration() {
+void findAacceleration() {//Meassuer acceleration based on speed
   static float speedB, lastSpeedTime = 0;
   if (millis() - lastSpeedTime >= 10) {
     lastSpeedTime = millis();
