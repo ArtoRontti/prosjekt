@@ -1,17 +1,17 @@
-#include <Wire.h>
+#include <Wire.h> //include all libraries
 #include <Zumo32U4.h>
 #include <Arduino.h>
 
-//hei
 Zumo32U4OLED display;
 Zumo32U4Motors motors;
 Zumo32U4Encoders encoders;
 Zumo32U4LineSensors lineSensors;
 
+// variables for driving
 bool sportMode = false;
 bool EcoMode = false;
 bool speedUpdated = false;
-int accelerationSpeed = 50;
+int accelerationSpeed = 0;
 int currentSpeed;
 int regularSpeed = 300;
 int sportSpeed = 400;
@@ -22,16 +22,20 @@ bool w = false;
 bool s = false;
 bool x = false;
 
+//charging
+bool charge = false;
+
 unsigned long accelerationStart;
 unsigned long decelerationStart;
 int targetSpeed;
 int accelerationVariable;
 //float speed = 300.00;
-float speed;
+float speed = 0.0;
 float previousSpeed;
 float newSpeed = 00.00;
 
 float LAST_TIME = 0;    // brukt for a oppdatere speed hver 100 ms
+float LAST_TIME1 = 0;
 float total_speed = 0;  //for moving average
 int counter = 0;
 
@@ -46,12 +50,28 @@ float powerRemaining = 0;
 float lastPower = 0;
 float powerUsed = 0;
 
+//Discount
+float discount;
+float wallet = 100;
+float elPrice = 5;
+
+float test = 0.00;
+
+//struct message setup
+struct sendInfo{
+  float s;
+  float d;
+  float p;
+};
+
+sendInfo info;
+
 void setup() {
   Serial.begin(115200);
   Serial.println("Setup initiated..");
   Wire.begin(8);  // Zumo I2C address
   Wire.onReceive(receiveEvent);
-  Wire.onRequest(sendData);
+  Wire.onRequest(sendData);  //sends speed to esp on request
 
   encoders.init();
   display.init();
@@ -66,13 +86,25 @@ void loop() {
 
   if (millis() - LAST_TIME >= 100) {                                        // moving average update speed every 100 ms (20 data points)
     speed = UpdateSpeed(speed, counter, total_speed, millis(), LAST_TIME);  // returnerer en float
-    powerUsed = (lastPower - powerRemaining) / 0.1;                         // kWh/s (eller effekt/forbruk)
+    powerUsed = (lastPower - powerRemaining) / 0.1;  // kWh/s (eller effekt/forbruk)
     lastPower = powerRemaining;
     LAST_TIME = millis();
+  }
+
+  if(millis() - LAST_TIME1 >= 300){
+    discount = UpdateDiscount(speed, discount);
+    LAST_TIME1 = millis();
   }
   battery_level = UpdateBattery(speed, battery_level);
   powerRemaining = (battery_level / 100) * 82;  // 82 kWh i en elbils batteri (fra Tesla)
 
+  if (charge) {  //Knapp for å lade bilen og betale
+    wallet = UpdateWallet(battery_level, discount, wallet, elPrice);
+    discount = 0;
+    battery_level = 100;
+    Serial.println("Charging initiated");
+    charge = false;
+  }
   acceleration();
 
 
@@ -87,32 +119,24 @@ void receiveEvent() {
     Serial.println(mode);
 
     switch (mode) {  // switch case that takes commands from the master(esp32)
-      case 'h':
+      case 'h': //sport mode
         targetSpeed = 400;
         accelerationVariable = 3;
-        //display.clear();
-        //display.print("SportMode chosen");
         break;
-      case 'l':
+      case 'l': //eco mode
         targetSpeed = 200;
         accelerationVariable = 1;
-        //display.clear();
-        //display.print("EcoMode chosen");
         break;
-      case 'n':
+      case 'n': //regular mode
         targetSpeed = 300;
         accelerationVariable = 2;
-        //display.clear();
-        //display.print("Regular mode chosen");
         break;
       case 'w':  // Move forward
-        motors.setSpeeds(accelerationSpeed, accelerationSpeed);
         w = true;
         x = false;
         s = false;
         break;
-      case 's':                                                  // Move backward
-        motors.setSpeeds(accelerationSpeed, accelerationSpeed);  //direction defined in acceleration function
+      case 's': //move backward
         s = true;
         x = false;
         w = false;
@@ -123,32 +147,46 @@ void receiveEvent() {
       case 'd':  // Turn right
         motors.setSpeeds(accelerationSpeed, -accelerationSpeed);
         break;
-      case 'f':
+      case 'f': //linefollower
         FollowLine();
         break;
-      case 'c':
-        calibrate();
+      case 'c': //calibrate sensors
+        calibrate(); 
         break;
       case 'x':
         //accelerationVariable = 3;
         w = false;
         s = false;
         x = true;
-        motors.setSpeeds(0, 0);
+        //motors.setSpeeds(0, 0);
         break;
-      default:  // Stop
-        motors.setSpeeds(0, 0);
+      case '1': //battery charges fully
+        charge = true;
+        break;
+      case 'g'://battery is selling
+        battery_level -= 5.0;
+        Serial.println("g");
+        break;
+      case 'y'://battery is charging
+        battery_level += 5.0;
+        break;
+      case 'q': //"hand break"
+        accelerationSpeed = 0;
+        motors.setSpeeds(accelerationSpeed, accelerationSpeed);
+        break;
+      default: 
+        motors.setSpeeds(accelerationSpeed, accelerationSpeed);
         break;
     }
   }
 }
 void calibrate() {
-  unsigned long startMillis = millis();
+  static unsigned long startMillis = millis();
   display.clear();
   display.setLayout11x4();
   display.gotoXY(1, 1);
   display.print("calibrate");
-  while (millis() - startMillis < 3000)  // lock in rotation while calibrating for 3 seconds
+  while (millis() - startMillis <= 3000)  // lock in rotation while calibrating for 3 seconds
   {
     motors.setSpeeds(-200, 200);
     lineSensors.calibrate();
@@ -180,8 +218,8 @@ void FollowLine()  // Two modes: standard and PID-regulation
 
   // Get individual motor speeds.  The sign of speedDifference
   // determines if the robot turns left or right.
-  int16_t leftSpeed = 400 + speedDifference;  // speedDifference > 0 when position > 2000 (position of line is to the right), turns left
-  int16_t rightSpeed = 400 - speedDifference;
+  int16_t leftSpeed = 200 + speedDifference;  // speedDifference > 0 when position > 2000 (position of line is to the right), turns left
+  int16_t rightSpeed = 200 - speedDifference;
 
   // Constrain our motor speeds to be between 0 and maxSpeed.
   // One motor will always be turning at maxSpeed, and the other
@@ -190,8 +228,13 @@ void FollowLine()  // Two modes: standard and PID-regulation
   // might want to allow the motor speed to go negative so that
   // it can spin in reverse.
 
-  leftSpeed = constrain(leftSpeed, 0, 400);
-  rightSpeed = constrain(rightSpeed, 0, 400);
+  leftSpeed = constrain(leftSpeed, 0, 200);
+  rightSpeed = constrain(rightSpeed, 0, 200);
+
+  if(lineSensorValues[0] >= 1000 && lineSensorValues[4] >= 1000){ // stops when on a crossection
+    motors.setSpeeds(0,0);
+    delay(2000); // resumes after 2 seconds
+  }
 
   motors.setSpeeds(leftSpeed, rightSpeed);
 }
@@ -213,6 +256,8 @@ float UpdateSpeed(float speed, int counter, float total_speed, float CURRENT_TIM
   float moving = (rotationsRight != 0 || rotationsLeft != 0);
   float distanceRight = rotationsRight * (3.5 * 3.14);              // centimeters (3.5 cm)
   float distanceLeft = rotationsLeft * (3.5 * 3.14);                // centimeters
+  test +=distanceLeft;
+  //Serial.println(test);
   float distanceDifferential = (distanceRight + distanceLeft) / 2;  // in centimeters
   // float distanceTraveled += (distanceRight + distanceLeft) / (2 * 100);       // in meters
   speed = (1000 * (distanceDifferential)) / (CURRENT_TIME - LAST_TIME);  // dv/dt = (avg(dr,dl)) / dt (cm / s) *1000 since CURRENT_TIME is ms
@@ -276,22 +321,45 @@ void BatteryStatusDisplay(float battery_level, float account_balance, float CURR
   display.print("sec");
 }
 
-void sendData() {
+void sendData() { //struct message makes sending different values from same slave address much easier
+  info.s = speed;  
+  info.d = discount;
+  info.p = battery_level;
 
-  if (speed != previousSpeed) {
-    byte speedBytes[sizeof(float)];
-    memcpy(speedBytes, &speed, sizeof(float));
-    Wire.write(speedBytes, sizeof(float));  // Write the byte array
-    Wire.endTransmission();
-    Serial.println(speed);
+  size_t structSize = sizeof(info);
+  Wire.write((uint8_t*)&info, structSize);
+}
+
+float UpdateDiscount(float Speed, float discount) {  //Oppdaterer discount variebelen basert på akselerasjon
+  static float lastSpeed;
+  if (abs((speed - lastSpeed)/300) <= 0.8 && abs(speed - lastSpeed) != 0) {
+    discount += (1.0 / 1000.0);
   }
-  previousSpeed = speed;
+  else if(abs((speed - lastSpeed)/300) >= 0.2){
+    discount -= (1.0 / 1000.0);
+  }
+  if (discount > 0.20) {
+    discount = 0.20;
+  }
+  else if (discount < 0){
+    discount = 0;
+  }
+  lastSpeed = abs(Speed);
+  return discount;
+}
+
+float UpdateWallet(float battery_level, float discount, float wallet, float elPrice) {  //funksjon som oppdaterer kontoen basert på mengde ladet, strømpris og discount
+  float amount = 100 - battery_level;
+  float kwh = (amount / 100) * 82;
+  wallet -= (kwh * elPrice - (kwh * elPrice * discount));
+  return wallet;
 }
 
 void acceleration() {
   //forward
-  if (w) {
-    if (millis() - accelerationStart >= 10) {
+  if (w) { 
+    s = false; // cant reverse and forward at the same time
+    if (millis() - accelerationStart >= 10) { // speed increases with 10ms intervals
       if (accelerationSpeed < targetSpeed) {
         accelerationSpeed += accelerationVariable;
       }
@@ -300,19 +368,21 @@ void acceleration() {
       }
       accelerationStart = millis();
     }
+    motors.setSpeeds(accelerationSpeed, accelerationSpeed);
   }
-  if (x) {
+  /*if (x) {
     accelerationSpeed = 0;
-  }
+  }*/
   if (s) {
-    if (millis() - accelerationStart >= 10) {
-      if (accelerationSpeed < targetSpeed) {
-        accelerationSpeed -= accelerationVariable;
+    w = false; // cant reverse and forward at the same time
+    if (millis() - decelerationStart >= 10) { // speed decelerates at 10 ms intervals
+      accelerationSpeed -= accelerationVariable;
+      
+      if (accelerationSpeed <= -targetSpeed) {
+        accelerationSpeed = -targetSpeed;
       }
-      if (accelerationSpeed >= targetSpeed) {
-        accelerationSpeed = targetSpeed;
-      }
-      accelerationStart = millis();
+      decelerationStart = millis();
     }
+    motors.setSpeeds(accelerationSpeed, accelerationSpeed);
   }
 }
