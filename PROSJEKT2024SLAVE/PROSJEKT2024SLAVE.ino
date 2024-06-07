@@ -181,12 +181,12 @@ void receiveEvent() {
   }
 }
 void calibrate() {
-  unsigned long startMillis = millis();
+  static unsigned long startMillis = millis();
   display.clear();
   display.setLayout11x4();
   display.gotoXY(1, 1);
   display.print("calibrate");
-  while (millis() - startMillis < 3000)  // lock in rotation while calibrating for 3 seconds
+  while (millis() - startMillis <= 3000)  // lock in rotation while calibrating for 3 seconds
   {
     motors.setSpeeds(-200, 200);
     lineSensors.calibrate();
@@ -218,8 +218,8 @@ void FollowLine()  // Two modes: standard and PID-regulation
 
   // Get individual motor speeds.  The sign of speedDifference
   // determines if the robot turns left or right.
-  int16_t leftSpeed = 400 + speedDifference;  // speedDifference > 0 when position > 2000 (position of line is to the right), turns left
-  int16_t rightSpeed = 400 - speedDifference;
+  int16_t leftSpeed = 200 + speedDifference;  // speedDifference > 0 when position > 2000 (position of line is to the right), turns left
+  int16_t rightSpeed = 200 - speedDifference;
 
   // Constrain our motor speeds to be between 0 and maxSpeed.
   // One motor will always be turning at maxSpeed, and the other
@@ -228,8 +228,13 @@ void FollowLine()  // Two modes: standard and PID-regulation
   // might want to allow the motor speed to go negative so that
   // it can spin in reverse.
 
-  leftSpeed = constrain(leftSpeed, 0, 400);
-  rightSpeed = constrain(rightSpeed, 0, 400);
+  leftSpeed = constrain(leftSpeed, 0, 200);
+  rightSpeed = constrain(rightSpeed, 0, 200);
+
+  if(lineSensorValues[0] >= 1000 && lineSensorValues[4] >= 1000){
+    motors.setSpeeds(0,0);
+    delay(2000);
+  }
 
   motors.setSpeeds(leftSpeed, rightSpeed);
 }
@@ -327,11 +332,17 @@ void sendData() { //struct message makes sending different values from same slav
 
 float UpdateDiscount(float Speed, float discount) {  //Oppdaterer discount variebelen basert på akselerasjon
   static float lastSpeed;
-  if (abs(speed - lastSpeed) <= 0.3 && abs(speed - lastSpeed) != 0) {
+  if (abs((speed - lastSpeed)/300) <= 0.8 && abs(speed - lastSpeed) != 0) {
     discount += (1.0 / 1000.0);
+  }
+  else if(abs((speed - lastSpeed)/300) >= 0.2){
+    discount -= (1.0 / 1000.0);
   }
   if (discount > 0.20) {
     discount = 0.20;
+  }
+  else if (discount < 0){
+    discount = 0;
   }
   lastSpeed = abs(Speed);
   return discount;
