@@ -1,4 +1,4 @@
-#include <WiFi.h>
+#include <WiFi.h> //include necessary libraries
 #include <esp_now.h>
 #include <WebServer.h>
 #include <Wire.h>
@@ -6,8 +6,8 @@
 #include "UbidotsEsp32Mqtt.h"
 #include <SparkFun_APDS9960.h>
 
-#define I2C_SDA 13  //bus
-#define I2C_SCL 12  //bus
+#define I2C_SDA 13  //bus pins for I2C communication
+#define I2C_SCL 12  
 
 //WiFi
 const char* ssid = "NTNU-IOT";  //wifi name
@@ -15,7 +15,7 @@ const char* password = "";      //Wifi password
 WebServer server(80);           // basic server
 
 //ubidots
-const char* UBIDOTS_TOKEN = "BBUS-AcTJ6ccXQVpNyEBYHJ1dRor0GteJmb";
+const char* UBIDOTS_TOKEN = "BBUS-AcTJ6ccXQVpNyEBYHJ1dRor0GteJmb"; //labels for ubidots variables for sensor values
 const char* DEVICE_LABEL = "zumoesp";
 const char* VARIABLE_LABELa = "akselerasjon";
 const char* VARIABLE_LABELd = "discount";
@@ -23,7 +23,7 @@ const char* VARIABLE_LABELs = "strompris";
 const char* VARIABLE_LABELr = "redZone";
 const char* VARIABLE_LABELg = "greenZone";
 const char* VARIABLE_LABELb = "blueZone";
-Ubidots ubidots(UBIDOTS_TOKEN);
+Ubidots ubidots(UBIDOTS_TOKEN); // account token
 
 //RGBsensor
 SparkFun_APDS9960 apds = SparkFun_APDS9960();
@@ -75,25 +75,23 @@ String generateBatteryHTML(float receivedBattery) {
 }
 
 //////////////esp now///////////////////
-
-
-uint8_t broadcastAddress[] = { 0x44, 0x17, 0x93, 0x5e, 0x45, 0x0c };  // addresse til joshua sin
-//uint8_t broadcastAddress[] = { 0x44, 0x17, 0x93, 0x5e, 0x48, 0x34 };  // addresse til eivind sin
+uint8_t broadcastAddress[] = { 0x44, 0x17, 0x93, 0x5e, 0x45, 0x0c };  // Joshua ESP address
+//uint8_t broadcastAddress[] = { 0x44, 0x17, 0x93, 0x5e, 0x48, 0x34 };  // Eivind ESP address
 
 // Variable to store if sending data was successful
 String success;
 
 //same on both zumo's
 typedef struct struct_message {
-  char msg1[100];
-  char msg2[100];
+  char msg1[100]; // message one size is 100 bytes
+  char msg2[100]; // same with message two
 } struct_message;
 
-struct_message incomingData;
-struct_message outgoingData;
-bool car2car = false;
+struct_message incomingData; //incoming message setup is the same as struct message
+struct_message outgoingData; //same with outgoing message
+bool car2car = false; //boolean variables for car2car charging
 bool FromCar2Car = false;
-const unsigned long chargeInterval = 5000;
+const unsigned long chargeInterval = 5000; //interval for car2car charging
 
 char incomingMsg1[100];  //100 byte message
 char incomingMsg2[100];
@@ -113,10 +111,10 @@ void OnDataRecv(const uint8_t* mac, const uint8_t* incomingData, int len) {
   // Cast incomingData to the struct_message type
   struct_message* receivedData = (struct_message*)incomingData;
 
-  strcpy(incomingMsg1, receivedData->msg1);
+  strcpy(incomingMsg1, receivedData->msg1); //copies received data to message array
   strcpy(incomingMsg2, receivedData->msg2);
 
-  Serial.print("Bytes received: ");
+  Serial.print("Bytes received: "); 
   Serial.println(len);
   // Print the received messages
   Serial.print("Message 1: ");
@@ -126,14 +124,14 @@ void OnDataRecv(const uint8_t* mac, const uint8_t* incomingData, int len) {
 }
 
 
-unsigned long espNowMillis;
+unsigned long espNowMillis; // timer for esp-now communication
 
 esp_now_peer_info_t peerInfo;
 // esp now FINITO//////////////////
 
 void setup() {
   //esp now
-  WiFi.mode(WIFI_STA);
+  WiFi.mode(WIFI_STA); //wifi to stationary mode
   // Init ESP-NOW
   if (esp_now_init() != ESP_OK) {
     Serial.println("Error initializing ESP-NOW");
@@ -169,7 +167,7 @@ void setup() {
   ubidots.setCallback(callback);
   ubidots.setup();
   ubidots.reconnect();
-  ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABELa);
+  ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABELa); //connect variables to a spesific ubidots device
   ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABELd);
   ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABELs);
   ubidots.subscribeLastValue(DEVICE_LABEL, VARIABLE_LABELr);
@@ -289,9 +287,9 @@ void setup() {
         receivedDiscount = 0.00;  // resets charging discount after charging to promote economic driving
       }
 
-      else if (key == "2") {
+      else if (key == "2") { //used to accept car2car charging if available
         car2car = true;
-      } else if (key == "3") {
+      } else if (key == "3") { //used to 
         FromCar2Car = true;
       }
     } else {
@@ -304,21 +302,21 @@ void setup() {
   rgbSensorSetup();
 }
 
-void callback(char* topic, byte* payload, unsigned int length) {
+void callback(char* topic, byte* payload, unsigned int length) { //prints the topic of the arrived message
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("]");
 
-  String payloadStr = "";
-  for (int i = 0; i < length; i++) {
+  String payloadStr = ""; //inititalizes an empty string to hold the message
+  for (int i = 0; i < length; i++) { //converts the bytes to a character
     payloadStr += (char)payload[i];
   }
-  Serial.print(payloadStr);
+  Serial.print(payloadStr); //prints the "decoded" message
 }
 
 void loop() {
   server.handleClient();
-  if (!ubidots.connected()) {
+  if (!ubidots.connected()) { //reconnect if connection is lost
     ubidots.reconnect();
   }
   ubidots.loop();
@@ -338,16 +336,16 @@ void receiveData() {
   Wire.readBytes((uint8_t*)&info, sizeof(sendInfo));  // reads the received info
 
   //access received data
-  receivedDiscount = info.d;
-  receivedBattery = info.p;
+  receivedDiscount = info.d; // stores the received discount value in a struct message under d
+  receivedBattery = info.p; // stores the received battery in a struct message under p
 
-  if (acceleration != newAcceleration) {
-    ubidots.add(VARIABLE_LABELa, acceleration);
+  if (acceleration != newAcceleration) { // only publishes the acceleration when it changes value
+    ubidots.add(VARIABLE_LABELa, acceleration); 
     ubidots.publish();
     newAcceleration = acceleration;
   }
 
-  if (receivedDiscount != newDiscount) {
+  if (receivedDiscount != newDiscount) { // only publishes the discount when it changes value
     //Serial.print("Discount: ");
     //Serial.println(receivedDiscount);
     float yourElPrice = elPrice(hour) - (elPrice(hour) * receivedDiscount);
@@ -357,11 +355,11 @@ void receiveData() {
     newDiscount = receivedDiscount;
   }
 
-  if (receivedBattery != newBattery) {
+  if (receivedBattery != newBattery) { //updates batterylevel when it changes value
     newBattery = receivedBattery;
   }
 }
-float elPrice(float hour) {//function for telling power price at differnt time of day
+float elPrice(float hour) {//function for telling power price at a different time of day
   float price = 0.0;
 
   if (hour >= 0 && hour < 6) {
@@ -445,8 +443,8 @@ void CarToCarSend() {
 }
 
 void espNowSend(){//procedure for sending message with espNow
-  esp_err_t result = esp_now_send(broadcastAddress, (uint8_t*)&outgoingData, sizeof(outgoingData));
-      if (result == ESP_OK) {
+  esp_err_t result = esp_now_send(broadcastAddress, (uint8_t*)&outgoingData, sizeof(outgoingData)); // sends the message 
+      if (result == ESP_OK) { // checks if the message gets sent
         Serial.println("Sent with success");
       } else {
         Serial.println("Error sending the data");
@@ -491,7 +489,7 @@ void zoneCheck() {
       Serial.println("Error reading light values");
     }
     if (ambient_light > 5000) {//check wich light is strongest
-      if (red_light > green_light + blue_light - 1000) {
+      if (red_light > green_light + blue_light - 1000) { // different values for each color
         zone = 'r';
       } else if (green_light > red_light + blue_light - 2000) {
         zone = 'g';
@@ -518,11 +516,11 @@ void zoneCheck() {
     }
   }
 }
-void findAacceleration() {//Meassuer acceleration based on speed
+void findAacceleration() {//Meassures acceleration based on speed
   static float speedB, lastSpeedTime = 0;
   if (millis() - lastSpeedTime >= 10) {
     lastSpeedTime = millis();
-    acceleration = info.s - speedB;
-    speedB = info.s;
+    acceleration = info.s - speedB; 
+    speedB = info.s; 
   }
 }
